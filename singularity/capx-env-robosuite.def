@@ -1,0 +1,102 @@
+# CapX ROBOSUITE env-backend image (3-tier, D7).
+#
+# Singularity port of docker/Dockerfile.env-robosuite. Hosts ONE simulator
+# (Robosuite/MuJoCo) as a LowLevelEnv backend behind the sim-agnostic gateway.
+# It is never reachable by a submission: the eval runner gives it a gateway-only
+# socket and the submission container runs with `--net --network=none`
+# (docs/operations.md).
+#
+# Headless EGL rendering; mujoco is pinned to 3.5.0 because >=3.10 breaks
+# robosuite's mj_fullM.
+#
+# Build (on a compute node):
+#   sbatch -p part-$(id -gn) singularity/build.sbatch env-robosuite
+
+Bootstrap: docker
+From: nvidia/cuda:12.4.1-runtime-ubuntu22.04
+
+%files
+    pyproject.toml /workspace/capx/pyproject.toml
+    README.md /workspace/capx/README.md
+    capx /workspace/capx/
+    docker /workspace/capx/
+    env_configs /workspace/capx/
+    taskpacks /workspace/capx/
+
+%post
+    set -eu
+    export DEBIAN_FRONTEND=noninteractive
+    # Only robosuite's vendored stack is used here; the other simulators ship
+    # mutually incompatible copies and must not share this venv.
+    cd /workspace/capx/capx/third_party
+    find . -mindepth 1 -maxdepth 1 ! -name robosuite ! -name pyroki_snippets -exec rm -rf {} +
+
+    apt-get update && apt-get install -y --no-install-recommends \
+        software-properties-common ca-certificates
+    add-apt-repository ppa:deadsnakes/ppa
+    apt-get update && apt-get install -y --no-install-recommends \
+        python3.11 python3.11-dev python3.11-venv python3-pip \
+        git build-essential \
+        libgl1 libglx0 libegl1 libopengl0 libosmesa6 libglu1-mesa \
+        libx11-6 libxext6 libxrender1
+    rm -rf /var/lib/apt/lists/*
+
+    update-alternatives --install /usr/bin/python python /usr/bin/python3.11 1
+    ln -sf /usr/bin/python3.11 /usr/local/bin/python
+    python -m ensurepip --upgrade
+    python -m pip install --no-cache-dir --upgrade pip
+
+    cd /workspace/capx
+    # Sim stack only — the heavy perception/planning deps are submission-side.
+    # `--no-deps` on the editable installs keeps pip from pulling a conflicting mujoco.
+    python -m pip install --no-cache-dir \
+        "mujoco==3.5.0" \
+        "numpy==1.26.4" \
+        "scipy" \
+        "pydantic>=2.7" \
+        "pyyaml" \
+        "pillow>=10" \
+        "msgpack" \
+        "gymnasium>=0.29" \
+        "opencv-python-headless" \
+        "viser>=0.2.0" \
+        "matplotlib" \
+        "h5py" \
+        "robot_descriptions" \
+        "yourdfpy" \
+        "termcolor" \
+        "numba==0.61.2" \
+        "tqdm"
+    python -m pip install --no-cache-dir --no-deps -e capx/third_party/robosuite
+    python -m pip install --no-cache-dir --no-deps -e .
+    # robosuite 1.5 writes a private macros file on first import; generate it at
+    # build time so a read-only container start does not try to.
+    python capx/third_party/robosuite/robosuite/scripts/setup_macros.py || true
+
+    # MuJoCo renders headlessly through EGL. `--nv` binds libEGL_nvidia, but the
+    # glvnd loader also needs the vendor ICD that Docker's nvidia runtime injects
+    # and Singularity does not; without it EGL fails with "does not support the
+    # PLATFORM_DEVICE extension" and every episode comes back as env_crash.
+    mkdir -p /usr/share/glvnd/egl_vendor.d
+    printf '%s\n' '{"file_format_version":"1.0.0","ICD":{"library_path":"libEGL_nvidia.so.0"}}' \
+        > /usr/share/glvnd/egl_vendor.d/10_nvidia.json
+
+    # The repo tree is group-only (0770) on the build host and everything lands
+    # owned by root under --fakeroot, so a container started by an ordinary user
+    # could not even traverse it. Make the installed tree world-readable.
+    chmod -R a+rX /workspace/capx
+
+%environment
+    export PYTHONUNBUFFERED=1
+    export PYTHONPATH=/workspace/capx
+    export MUJOCO_GL=egl
+    export CAPX_SIMULATOR=robosuite
+    export CAPX_BACKEND_HOST=127.0.0.1
+    export CAPX_BACKEND_PORT=8100
+
+%runscript
+    cd /workspace/capx
+    exec python docker/serve_env_backend.py "$@"
+
+%labels
+    capx.role env-robosuite

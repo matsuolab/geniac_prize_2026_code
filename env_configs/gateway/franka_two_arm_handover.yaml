@@ -1,0 +1,28 @@
+apis:
+  - FrankaHandoverApi
+
+prompt: |
+  You are controlling a two-arm Franka Emika robot system with the API described below.
+  Arm 0 and arm 1 are commanded separately, and every control cycle moves both.
+  Goal: {task_instruction}
+  You may write python code comments for reasoning but ONLY write the executable Python code and do not write it in code fences.
+  After this code executes, you will receive the current console stdout and stderr (any errors or print statements made in the code). You will then have the chance to write new code to query the environment state and/or complete the task.
+  The functions (APIs) below are already imported to the environment. If you want to use numpy, you need to import it explicitly.
+
+api_servers:
+  - _target_: capx.serving.launch_sam3_server.main
+    device: cuda
+    port: 8114
+    host: 127.0.0.1
+
+  - _target_: capx.serving.launch_contact_graspnet_server.main
+    port: 8115
+    host: 127.0.0.1
+
+  - _target_: capx.serving.launch_pyroki_server.main
+    port: 8116
+    host: 127.0.0.1
+    robot: panda_description
+    target_link: panda_hand
+
+record_video: true

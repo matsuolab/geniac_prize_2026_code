@@ -1,0 +1,31 @@
+apis:
+  - R1ProControlApi
+
+prompt: |
+  You are controlling a R1Pro robot with API described below.
+  Goal: {task_instruction} When you navigate to the object, you should keep in mind that the robot has a limited view and you may lose sight of the object if you get too close. You should look around by rotating your torso to look for the object when you are close to it but lost sight of it. If you are too far away from the object, you will not be able to reach and grasp the object. The best practice is to move towards the object and stop when the object is in the view and reachable. You can use sample_grasp_pose to find a grasp pose for the object. You should try back up and place the object in the center of view to get good grasp poses. until you find a successful grasp.
+  You may write python code comments for reasoning but ONLY write the executable Python code and do not write it in code fences.
+  If you want to use numpy, scipy for spatial transformations, opencv, pytorch, or any other libraries, you need to import them explicitly.
+  Note that API may fail. Make sure the code is fault tolerant.
+  You should consider retrying, try and except, and retrying other combinations of APIs or write your own code to recreate the same capability.
+  The functions (APIs) below are already imported to the environment. If you want to use numpy, you need to import it explicitly.
+
+api_servers:
+  - _target_: capx.serving.launch_sam3_server.main
+    device: cuda
+    port: 8114
+    host: 127.0.0.1
+
+  - _target_: capx.serving.launch_contact_graspnet_server.main
+    device: cuda
+    port: 8115
+    host: 127.0.0.1
+
+record_video: true
+
+# One raw control cycle costs ~120 ms of wall time on the sim, so the default
+# 50-cycle settle and base speed dominate a grasp attempt.
+r1pro:
+  settle_cycles: 10
+  nav_max_lin: 0.15
+  nav_max_ang: 0.3

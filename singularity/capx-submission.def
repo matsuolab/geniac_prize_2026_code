@@ -1,0 +1,75 @@
+# CapX SUBMISSION baseline image — the forkable team side.
+#
+# Singularity port of docker/Dockerfile.submission. Runs the agent loop against the
+# gateway and nothing else: the eval queue starts it with `--net --network=none`,
+# so its only reachable surface is the gateway socket bind-mounted at
+# /capx/run/gateway.sock (CAPX_ENV_SOCKET).
+#
+# Teams fork this and swap the baseline policy for their vLLM + perception +
+# primitive stack; the heavy deps are deliberately absent here (see the comment in
+# %post for what a fork adds).
+#
+# Build (on a compute node):
+#   sbatch -p part-$(id -gn) singularity/build.sbatch submission
+
+Bootstrap: docker
+From: nvidia/cuda:12.4.1-runtime-ubuntu22.04
+
+%files
+    pyproject.toml /workspace/capx/pyproject.toml
+    README.md /workspace/capx/README.md
+    capx /workspace/capx/
+    docker /workspace/capx/
+    env_configs /workspace/capx/
+    taskpacks /workspace/capx/
+
+%post
+    set -eu
+    export DEBIAN_FRONTEND=noninteractive
+    # A submission image hosts no simulator.
+    rm -rf /workspace/capx/capx/third_party
+
+    apt-get update && apt-get install -y --no-install-recommends \
+        software-properties-common ca-certificates
+    add-apt-repository ppa:deadsnakes/ppa
+    apt-get update && apt-get install -y --no-install-recommends \
+        python3.11 python3.11-dev python3.11-venv python3-pip git
+    rm -rf /var/lib/apt/lists/*
+
+    update-alternatives --install /usr/bin/python python /usr/bin/python3.11 1
+    ln -sf /usr/bin/python3.11 /usr/local/bin/python
+    python -m ensurepip --upgrade
+    python -m pip install --no-cache-dir --upgrade pip
+
+    cd /workspace/capx
+    # Submission-side runtime only: the agent loop (capx.agent_client) + protocol
+    # client (capx.protocol). A fork adds its own stack on top, e.g.
+    #   pip install "vllm" accelerate transformers        # model server
+    #   pip install --no-deps -e capx/third_party/sam3    # perception
+    #   pip install --no-deps -e capx/third_party/contact_graspnet_pytorch
+    # and reads its weights from the read-only mounts its submission.yaml declares
+    # under `weights` (e.g. /models/sam3).
+    python -m pip install --no-cache-dir \
+        "numpy==1.26.4" \
+        "pydantic>=2.7" \
+        "pyyaml" \
+        "pillow>=10" \
+        "msgpack"
+    python -m pip install --no-cache-dir --no-deps -e .
+
+    # The repo tree is group-only (0770) on the build host and everything lands
+    # owned by root under --fakeroot, so a container started by an ordinary user
+    # could not even traverse it. Make the installed tree world-readable.
+    chmod -R a+rX /workspace/capx
+
+%environment
+    export PYTHONUNBUFFERED=1
+    export PYTHONPATH=/workspace/capx
+    export HF_HUB_OFFLINE=1
+
+%runscript
+    cd /workspace/capx
+    exec python docker/run_submission.py "$@"
+
+%labels
+    capx.role submission-baseline

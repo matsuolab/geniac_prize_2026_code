@@ -1,0 +1,180 @@
+# CapX SUBMISSION image — the CaP-Agent0 reference stack (vLLM + perception + IK).
+#
+# This is the realistic submission: what capx-submission.def is to "does the wiring
+# work", this is to "how long does a real agent actually take". It carries the whole
+# client side of the CaP-Agent0 pipeline, and drives the gateway over CAPX_ENV_SOCKET like any other submission.
+#
+# Two venvs on purpose, mirroring docker/run-qwen-server.sh: vLLM requires
+# transformers>=5 while cap-x pins transformers<5, and the two cannot share a venv.
+#
+#   /opt/venv-serve   vLLM + transformers>=5 + torch built for CUDA 13
+#   system python     cap-x client stack (agent loop, SAM3, GraspNet, pyroki IK)
+#
+# The runscript starts vLLM on loopback, waits for it, then runs the agent. The
+# eval queue gives the container a loopback-only network namespace, which is exactly
+# enough for the model server and the perception sidecars and nothing else.
+#
+# Build (on a compute node; this one is large and slow):
+#   sbatch -p part-$(id -gn) -t 08:00:00 singularity/build.sbatch submission-agent0
+
+Bootstrap: docker
+From: nvidia/cuda:12.8.1-cudnn-runtime-ubuntu22.04
+
+%files
+    pyproject.toml /workspace/capx/pyproject.toml
+    README.md /workspace/capx/README.md
+    capx /workspace/capx/
+    docker /workspace/capx/
+    env_configs /workspace/capx/
+    taskpacks /workspace/capx/
+    singularity/agent0-entrypoint.sh /workspace/capx/entrypoint.sh
+
+%post
+    set -eu
+    export DEBIAN_FRONTEND=noninteractive
+    # The client side hosts no simulator; keep only what the agent stack imports.
+    cd /workspace/capx/capx/third_party
+    find . -mindepth 1 -maxdepth 1 \
+        ! -name sam3 ! -name contact_graspnet_pytorch ! -name pyroki_snippets ! -name b1k \
+        -exec rm -rf {} +
+    # The R1Pro shim reads b1k/assets/r1pro_ik.urdf for joint limits and IK; the
+    # rest of b1k (OmniGibson, datasets) is simulator-side and ~580 MB.
+    find b1k -mindepth 1 -maxdepth 1 ! -name assets -exec rm -rf {} +
+
+    apt-get update && apt-get install -y --no-install-recommends \
+        software-properties-common ca-certificates
+    add-apt-repository ppa:deadsnakes/ppa
+    apt-get update && apt-get install -y --no-install-recommends \
+        python3.12 python3.12-dev python3.12-venv python3-pip \
+        git build-essential cmake ninja-build curl \
+        libgl1 libglx0 libegl1 libopengl0 libosmesa6 libglu1-mesa \
+        libx11-6 libxext6 libxrender1
+    rm -rf /var/lib/apt/lists/*
+
+    update-alternatives --install /usr/bin/python python /usr/bin/python3.12 1
+    ln -sf /usr/bin/python3.12 /usr/local/bin/python
+    python -m ensurepip --upgrade
+    # setuptools is pinned from both ends because SAM3 imports pkg_resources:
+    # Ubuntu's system copy is old enough to reference pkgutil.ImpImporter, which
+    # Python 3.12 removed, and setuptools 82 stopped shipping pkg_resources at all
+    # (verified against the published wheels: 81 has it, 82 does not).
+    # A pip-installed one in between lands earlier on sys.path than the system copy.
+    python -m pip install --no-cache-dir --upgrade pip "setuptools>=70,<82" wheel
+
+    cd /workspace/capx
+    # --- client stack -------------------------------------------------------
+    # The submission side's dependencies: torch (CPU is enough for the shims), jax + pyroki for IK,
+    # and the perception sidecars the task configs launch.
+    python -m pip install --no-cache-dir \
+        "numpy==1.26.4" \
+        "scipy" \
+        "pydantic>=2.7" \
+        "pyyaml" \
+        "omegaconf" \
+        "pillow>=10" \
+        "msgpack" \
+        "gymnasium>=0.29" \
+        "opencv-python-headless" \
+        "viser>=0.2.0" \
+        "trimesh>=4.4.0" \
+        "yourdfpy>=0.0.56" \
+        "robot_descriptions>=1.16.0" \
+        "matplotlib<3.9" \
+        "imageio[ffmpeg]" \
+        "mediapy>=1.2.5" \
+        "h5py" \
+        "einops" \
+        "tqdm" \
+        "rich>=13.7" \
+        "requests" \
+        "tyro>=0.8.5" \
+        "openai" \
+        "fastapi" \
+        "uvicorn" \
+        "cloudpickle" \
+        "pycocotools" \
+        "termcolor" \
+        "loguru" \
+        "hydra-core" \
+        "jax==0.4.29" \
+        "jaxlib==0.4.29" \
+        "jax-dataclasses==1.6.3" \
+        "jaxlie==1.5.0" \
+        "jaxtyping"
+    # matplotlib is repeated here for the same reason numpy is: --ignore-installed
+    # re-resolves open3d's dependencies and would otherwise pull the latest, which
+    # dropped cm.get_cmap that capx/utils/depth_utils.py calls.
+    python -m pip install --no-cache-dir --ignore-installed \
+        "open3d==0.19.0" "numpy==1.26.4" "matplotlib<3.9"
+    # CUDA 13, not 12.8. A cu128 build has no kernels for this GPU (sm_103): SAM3
+    # inference dies inside cuDNN with "No valid execution plans built", and with
+    # cuDNN disabled the fallback dies compiling a kernel at runtime. vLLM's own
+    # venv pulls a cu130 torch and works on the same card, so match it.
+    # The torch, torchvision, transformers and vllm pins below are the versions the
+    # image verified on the B300 was built with; the entrypoint's server flags
+    # depend on them.
+    python -m pip install --no-cache-dir "torch==2.14.1" "torchvision==0.29.1" \
+        --index-url https://download.pytorch.org/whl/cu130
+    python -m pip install --no-cache-dir "transformers==4.57.6" accelerate safetensors
+    # Runtime deps of the two perception sidecars, which are installed --no-deps
+    # (their own pins would drag in a conflicting torch): SAM3 needs iopath/timm/
+    # ftfy/regex, contact_graspnet's scene renderer needs pyrender.
+    python -m pip install --no-cache-dir \
+        "iopath>=0.1.10" "timm>=1.0.17" "ftfy==6.1.1" "regex" "pyrender"
+    # decord has no wheel for every interpreter; eva-decord is the maintained fork
+    # exposing the same `decord` module.
+    python -m pip install --no-cache-dir decord \
+        || python -m pip install --no-cache-dir eva-decord
+    python -m pip install --no-cache-dir --no-deps \
+        "jaxls@git+https://github.com/brentyi/jaxls.git@6fe7cf9d56223736b2c0272d080ec7346203c648" \
+        "pyroki@git+https://github.com/chungmin99/pyroki.git@95afccc22658c461ab1042a048ae4e9c24bc2a47"
+    # --no-build-isolation: contact_graspnet's setup.py imports numpy at build
+    # time, which an isolated build environment does not have.
+    python -m pip install --no-cache-dir --no-deps --no-build-isolation \
+        -e capx/third_party/sam3
+    python -m pip install --no-cache-dir --no-deps --no-build-isolation \
+        -e capx/third_party/contact_graspnet_pytorch
+    python -m pip install --no-cache-dir --no-deps -e .
+
+    # --- model server -------------------------------------------------------
+    # Separate venv: vLLM needs transformers>=5 (Qwen3.6's `qwen3_5` architecture),
+    # which cap-x's pin forbids. --system-site-packages is deliberately NOT used.
+    python -m venv /opt/venv-serve
+    /opt/venv-serve/bin/pip install --no-cache-dir --upgrade pip
+    # ninja is not optional here. The submission runs with no network, so
+    # flashinfer cannot fetch NVIDIA's prebuilt kernels and falls back to compiling
+    # them for this GPU at startup — without ninja that fallback dies with a bare
+    # FileNotFoundError and the engine never comes up.
+    /opt/venv-serve/bin/pip install --no-cache-dir \
+        "vllm==0.31.0" "transformers==5.17.0" "torch==2.13.0" "torchvision==0.28.0" \
+        "huggingface_hub" "ninja" "cmake"
+
+    # The pyroki IK server loads the Panda URDF through robot_descriptions, which
+    # git-clones it on first use. A submission has no network, so the clone has to
+    # happen now and live at a fixed path both the build and the run agree on.
+    export ROBOT_DESCRIPTIONS_CACHE=/opt/robot-descriptions
+    mkdir -p "${ROBOT_DESCRIPTIONS_CACHE}"
+    python -c "from robot_descriptions.loaders.yourdfpy import load_robot_description; load_robot_description('panda_description')"
+    # robot_descriptions re-checks the clone with git at load time, and git refuses
+    # a repository owned by someone else — which this is, baked as root and read by
+    # whoever the container runs as.
+    git config --system --add safe.directory '*' 
+
+    chmod +x /workspace/capx/entrypoint.sh
+    # The repo tree is group-only (0770) on the build host and everything lands
+    # owned by root under --fakeroot, so a container started by an ordinary user
+    # could not even traverse it. Make the installed tree world-readable.
+    chmod -R a+rX /workspace/capx /opt/venv-serve /opt/robot-descriptions
+
+%environment
+    export PYTHONUNBUFFERED=1
+    export PYTHONPATH=/workspace/capx
+    export HF_HUB_OFFLINE=1
+    export MPLBACKEND=Agg
+    export ROBOT_DESCRIPTIONS_CACHE=/opt/robot-descriptions
+
+%runscript
+    exec /workspace/capx/entrypoint.sh "$@"
+
+%labels
+    capx.role submission-agent0

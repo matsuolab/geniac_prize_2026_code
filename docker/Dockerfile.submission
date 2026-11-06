@@ -1,0 +1,53 @@
+# CapX SUBMISSION container — the team's forkable model/agent side.
+#
+# Runs the agent loop (EnvClient over HttpTransport) against the environment
+# container. Teams fork this and swap HoldPolicy for their vLLM + perception +
+# primitive stack. In official mode it sits on the egress-blocked policy_network
+# with model weights mounted read-only and HF_HUB_OFFLINE=1 (docker-compose.yml).
+#
+# NOTE: provided as a scaffold — NOT built or verified in this environment (needs a
+# GPU host + full image build).
+
+FROM nvidia/cuda:12.4.1-runtime-ubuntu22.04
+
+ENV DEBIAN_FRONTEND=noninteractive \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PYTHONPATH=/workspace/capx \
+    HF_HUB_OFFLINE=1 \
+    HF_HOME=/weights \
+    CAPX_ENV_HOST=gateway \
+    CAPX_ENV_PORT=8000
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        software-properties-common ca-certificates \
+    && add-apt-repository ppa:deadsnakes/ppa \
+    && apt-get update && apt-get install -y --no-install-recommends \
+        python3.11 python3.11-dev python3.11-venv python3-pip git \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN update-alternatives --install /usr/bin/python python /usr/bin/python3.11 1 \
+    && ln -sf /usr/bin/python3.11 /usr/local/bin/python \
+    && python -m ensurepip --upgrade \
+    && python -m pip install --upgrade pip
+
+WORKDIR /workspace/capx
+COPY . /workspace/capx
+
+# Submission-side runtime only: the agent loop (capx.agent_client) + protocol
+# client (capx.protocol). The team's heavy stack is intentionally left out of this
+# scaffold — a fork adds it on top, e.g.:
+#   pip install "vllm==0.15.0" accelerate transformers      # model server
+#   pip install --no-deps -e capx/third_party/sam3          # perception
+#   pip install --no-deps -e capx/third_party/contact_graspnet_pytorch
+#   pip install --no-deps -e capx/third_party/curobo        # planning (GPU arch!)
+# and mounts the pre-snapshotted weights read-only under $HF_HOME (HF_HUB_OFFLINE=1).
+RUN python -m pip install \
+        "numpy==1.26.4" \
+        "pydantic>=2.7" \
+        "pyyaml" \
+        "pillow>=10" \
+        "msgpack" \
+    && python -m pip install --no-deps -e .
+
+CMD ["python", "docker/run_submission.py"]

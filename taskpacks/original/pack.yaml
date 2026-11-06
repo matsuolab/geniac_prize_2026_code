@@ -1,0 +1,2674 @@
+pack_id: original
+version: '0.2'
+visibility: public
+limits:
+  trial_time_s: 300.0
+  n_trials: 1
+  trial_steplimit: 8000
+tasks:
+- task_id: cube_lifting
+  embodiment: franka
+  simulator: robosuite
+  instruction: Pick up the red cube and lift it. Quaternions are WXYZ.
+  camera_names:
+  - robot0_robotview
+  env_target: franka_robosuite_cube_lift_low_level
+  privileged: false
+  n_trials: 10
+  trial_steplimit: 1500
+  seed_policy:
+    mode: fixed
+    seeds:
+    - 0
+    - 1
+    - 2
+    - 3
+    - 4
+    - 5
+    - 6
+    - 7
+    - 8
+    - 9
+- task_id: cube_stack
+  embodiment: franka
+  simulator: robosuite
+  instruction: Pick up the red cube and gently stack it on top of the green cube, then release it. Quaternions
+    are WXYZ.
+  camera_names:
+  - robot0_robotview
+  env_target: franka_robosuite_cubes_low_level
+  privileged: false
+  n_trials: 10
+  trial_steplimit: 1500
+  seed_policy:
+    mode: fixed
+    seeds:
+    - 0
+    - 1
+    - 2
+    - 3
+    - 4
+    - 5
+    - 6
+    - 7
+    - 8
+    - 9
+- task_id: cube_restack
+  embodiment: franka
+  simulator: robosuite
+  instruction: Gently place the red cube on top of the green cube and then open the gripper. Nothing should
+    be dropped from a height. Quaternions are WXYZ.
+  camera_names:
+  - robot0_robotview
+  env_target: franka_robosuite_cubes_restack_low_level
+  privileged: false
+  n_trials: 10
+  trial_steplimit: 1500
+  seed_policy:
+    mode: fixed
+    seeds:
+    - 0
+    - 1
+    - 2
+    - 3
+    - 4
+    - 5
+    - 6
+    - 7
+    - 8
+    - 9
+- task_id: nut_assembly
+  embodiment: franka
+  simulator: robosuite
+  instruction: Grasp the brown square nut by its handle and insert it onto the brown square block. Quaternions
+    are WXYZ.
+  camera_names:
+  - robot0_robotview
+  env_target: franka_robosuite_nut_assembly_low_level
+  privileged: false
+  n_trials: 10
+  trial_steplimit: 1000
+  seed_policy:
+    mode: fixed
+    seeds:
+    - 0
+    - 1
+    - 2
+    - 3
+    - 4
+    - 5
+    - 6
+    - 7
+    - 8
+    - 9
+- task_id: spill_wipe
+  embodiment: franka
+  simulator: robosuite
+  instruction: Wipe up the brown spill. A sponge is already attached to the end-effector, and the table
+    surface is at z = 0.0 m. Quaternions are WXYZ.
+  camera_names:
+  - robot0_robotview
+  env_target: franka_robosuite_spill_wipe_low_level
+  privileged: false
+  n_trials: 10
+  trial_steplimit: 4000
+  seed_policy:
+    mode: fixed
+    seeds:
+    - 0
+    - 1
+    - 2
+    - 3
+    - 4
+    - 5
+    - 6
+    - 7
+    - 8
+    - 9
+- task_id: two_arm_lift
+  embodiment: franka_bimanual
+  simulator: robosuite
+  instruction: The two arms must coordinate to lift a pot. Arm 0 grasps handle 0 and arm 1 grasps handle
+    1, then both lift the pot. Quaternions are WXYZ.
+  camera_names:
+  - agentview
+  env_target: two_arm_lift_robosuite
+  privileged: false
+  n_trials: 10
+  trial_steplimit: 5000
+  seed_policy:
+    mode: fixed
+    seeds:
+    - 0
+    - 1
+    - 2
+    - 3
+    - 4
+    - 5
+    - 6
+    - 7
+    - 8
+    - 9
+- task_id: two_arm_handover
+  embodiment: franka_bimanual
+  simulator: robosuite
+  instruction: Arm 0 picks up the hammer, lifts it, and hands it over to arm 1, which grasps it by the
+    handle rather than the head. Quaternions are WXYZ.
+  camera_names:
+  - agentview
+  env_target: two_arm_handover_robosuite
+  privileged: false
+  n_trials: 10
+  trial_steplimit: 5000
+  seed_policy:
+    mode: fixed
+    seeds:
+    - 0
+    - 1
+    - 2
+    - 3
+    - 4
+    - 5
+    - 6
+    - 7
+    - 8
+    - 9
+- task_id: libero_10_0
+  embodiment: franka
+  simulator: libero
+  instruction: Put both the alphabet soup and the tomato sauce in the basket. Quaternions are WXYZ.
+  camera_names:
+  - agentview
+  - robot0_eye_in_hand
+  env_target: franka_libero_libero_10_0_low_level
+  privileged: false
+  seed_policy:
+    mode: fixed
+    seeds:
+    - 1
+- task_id: libero_10_1
+  embodiment: franka
+  simulator: libero
+  instruction: Put both the cream cheese box and the butter in the basket. Quaternions are WXYZ.
+  camera_names:
+  - agentview
+  - robot0_eye_in_hand
+  env_target: franka_libero_libero_10_1_low_level
+  privileged: false
+  seed_policy:
+    mode: fixed
+    seeds:
+    - 1
+- task_id: libero_10_2
+  embodiment: franka
+  simulator: libero
+  instruction: Turn on the stove and put the moka pot on it. Quaternions are WXYZ.
+  camera_names:
+  - agentview
+  - robot0_eye_in_hand
+  env_target: franka_libero_libero_10_2_low_level
+  privileged: false
+  seed_policy:
+    mode: fixed
+    seeds:
+    - 1
+- task_id: libero_10_3
+  embodiment: franka
+  simulator: libero
+  instruction: Put the black bowl in the bottom drawer of the cabinet and close it. Quaternions are WXYZ.
+  camera_names:
+  - agentview
+  - robot0_eye_in_hand
+  env_target: franka_libero_libero_10_3_low_level
+  privileged: false
+  seed_policy:
+    mode: fixed
+    seeds:
+    - 1
+- task_id: libero_10_4
+  embodiment: franka
+  simulator: libero
+  instruction: Put the white mug on the left plate and put the yellow and white mug on the right plate.
+    Quaternions are WXYZ.
+  camera_names:
+  - agentview
+  - robot0_eye_in_hand
+  env_target: franka_libero_libero_10_4_low_level
+  privileged: false
+  seed_policy:
+    mode: fixed
+    seeds:
+    - 1
+- task_id: libero_10_5
+  embodiment: franka
+  simulator: libero
+  instruction: Pick up the book and place it in the back compartment of the caddy. Quaternions are WXYZ.
+  camera_names:
+  - agentview
+  - robot0_eye_in_hand
+  env_target: franka_libero_libero_10_5_low_level
+  privileged: false
+  seed_policy:
+    mode: fixed
+    seeds:
+    - 1
+- task_id: libero_10_6
+  embodiment: franka
+  simulator: libero
+  instruction: Put the white mug on the plate and put the chocolate pudding to the right of the plate.
+    Quaternions are WXYZ.
+  camera_names:
+  - agentview
+  - robot0_eye_in_hand
+  env_target: franka_libero_libero_10_6_low_level
+  privileged: false
+  seed_policy:
+    mode: fixed
+    seeds:
+    - 1
+- task_id: libero_10_7
+  embodiment: franka
+  simulator: libero
+  instruction: Put both the alphabet soup and the cream cheese box in the basket. Quaternions are WXYZ.
+  camera_names:
+  - agentview
+  - robot0_eye_in_hand
+  env_target: franka_libero_libero_10_7_low_level
+  privileged: false
+  seed_policy:
+    mode: fixed
+    seeds:
+    - 1
+- task_id: libero_10_8
+  embodiment: franka
+  simulator: libero
+  instruction: Put both moka pots on the stove. Quaternions are WXYZ.
+  camera_names:
+  - agentview
+  - robot0_eye_in_hand
+  env_target: franka_libero_libero_10_8_low_level
+  privileged: false
+  seed_policy:
+    mode: fixed
+    seeds:
+    - 1
+- task_id: libero_10_9
+  embodiment: franka
+  simulator: libero
+  instruction: Put the yellow and white mug in the microwave and close it. Quaternions are WXYZ.
+  camera_names:
+  - agentview
+  - robot0_eye_in_hand
+  env_target: franka_libero_libero_10_9_low_level
+  privileged: false
+  seed_policy:
+    mode: fixed
+    seeds:
+    - 1
+- task_id: libero_90_0
+  embodiment: franka
+  simulator: libero
+  instruction: Close the top drawer of the cabinet. Quaternions are WXYZ.
+  camera_names:
+  - agentview
+  - robot0_eye_in_hand
+  env_target: franka_libero_libero_90_0_low_level
+  privileged: false
+  seed_policy:
+    mode: fixed
+    seeds:
+    - 1
+- task_id: libero_90_1
+  embodiment: franka
+  simulator: libero
+  instruction: Close the top drawer of the cabinet and put the black bowl on top of it. Quaternions are
+    WXYZ.
+  camera_names:
+  - agentview
+  - robot0_eye_in_hand
+  env_target: franka_libero_libero_90_1_low_level
+  privileged: false
+  seed_policy:
+    mode: fixed
+    seeds:
+    - 1
+- task_id: libero_90_2
+  embodiment: franka
+  simulator: libero
+  instruction: Put the black bowl in the top drawer of the cabinet. Quaternions are WXYZ.
+  camera_names:
+  - agentview
+  - robot0_eye_in_hand
+  env_target: franka_libero_libero_90_2_low_level
+  privileged: false
+  seed_policy:
+    mode: fixed
+    seeds:
+    - 1
+- task_id: libero_90_3
+  embodiment: franka
+  simulator: libero
+  instruction: Put the butter at the back in the top drawer of the cabinet and close it. Quaternions are
+    WXYZ.
+  camera_names:
+  - agentview
+  - robot0_eye_in_hand
+  env_target: franka_libero_libero_90_3_low_level
+  privileged: false
+  seed_policy:
+    mode: fixed
+    seeds:
+    - 1
+- task_id: libero_90_4
+  embodiment: franka
+  simulator: libero
+  instruction: Put the butter at the front in the top drawer of the cabinet and close it. Quaternions
+    are WXYZ.
+  camera_names:
+  - agentview
+  - robot0_eye_in_hand
+  env_target: franka_libero_libero_90_4_low_level
+  privileged: false
+  seed_policy:
+    mode: fixed
+    seeds:
+    - 1
+- task_id: libero_90_5
+  embodiment: franka
+  simulator: libero
+  instruction: Put the chocolate pudding in the top drawer of the cabinet and close it. Quaternions are
+    WXYZ.
+  camera_names:
+  - agentview
+  - robot0_eye_in_hand
+  env_target: franka_libero_libero_90_5_low_level
+  privileged: false
+  seed_policy:
+    mode: fixed
+    seeds:
+    - 1
+- task_id: libero_90_6
+  embodiment: franka
+  simulator: libero
+  instruction: Open the bottom drawer of the cabinet. Quaternions are WXYZ.
+  camera_names:
+  - agentview
+  - robot0_eye_in_hand
+  env_target: franka_libero_libero_90_6_low_level
+  privileged: false
+  seed_policy:
+    mode: fixed
+    seeds:
+    - 1
+- task_id: libero_90_7
+  embodiment: franka
+  simulator: libero
+  instruction: Open the top drawer of the cabinet. Quaternions are WXYZ.
+  camera_names:
+  - agentview
+  - robot0_eye_in_hand
+  env_target: franka_libero_libero_90_7_low_level
+  privileged: false
+  seed_policy:
+    mode: fixed
+    seeds:
+    - 1
+- task_id: libero_90_8
+  embodiment: franka
+  simulator: libero
+  instruction: Open the top drawer of the cabinet and put the bowl in it. Quaternions are WXYZ.
+  camera_names:
+  - agentview
+  - robot0_eye_in_hand
+  env_target: franka_libero_libero_90_8_low_level
+  privileged: false
+  seed_policy:
+    mode: fixed
+    seeds:
+    - 1
+- task_id: libero_90_9
+  embodiment: franka
+  simulator: libero
+  instruction: Put the black bowl on the plate. Quaternions are WXYZ.
+  camera_names:
+  - agentview
+  - robot0_eye_in_hand
+  env_target: franka_libero_libero_90_9_low_level
+  privileged: false
+  seed_policy:
+    mode: fixed
+    seeds:
+    - 1
+- task_id: libero_90_10
+  embodiment: franka
+  simulator: libero
+  instruction: Put the black bowl on top of the cabinet. Quaternions are WXYZ.
+  camera_names:
+  - agentview
+  - robot0_eye_in_hand
+  env_target: franka_libero_libero_90_10_low_level
+  privileged: false
+  seed_policy:
+    mode: fixed
+    seeds:
+    - 1
+- task_id: libero_90_11
+  embodiment: franka
+  simulator: libero
+  instruction: Open the top drawer of the cabinet. Quaternions are WXYZ.
+  camera_names:
+  - agentview
+  - robot0_eye_in_hand
+  env_target: franka_libero_libero_90_11_low_level
+  privileged: false
+  seed_policy:
+    mode: fixed
+    seeds:
+    - 1
+- task_id: libero_90_12
+  embodiment: franka
+  simulator: libero
+  instruction: Put the black bowl at the back on the plate. Quaternions are WXYZ.
+  camera_names:
+  - agentview
+  - robot0_eye_in_hand
+  env_target: franka_libero_libero_90_12_low_level
+  privileged: false
+  seed_policy:
+    mode: fixed
+    seeds:
+    - 1
+- task_id: libero_90_13
+  embodiment: franka
+  simulator: libero
+  instruction: Put the black bowl at the front on the plate. Quaternions are WXYZ.
+  camera_names:
+  - agentview
+  - robot0_eye_in_hand
+  env_target: franka_libero_libero_90_13_low_level
+  privileged: false
+  seed_policy:
+    mode: fixed
+    seeds:
+    - 1
+- task_id: libero_90_14
+  embodiment: franka
+  simulator: libero
+  instruction: Put the middle black bowl on the plate. Quaternions are WXYZ.
+  camera_names:
+  - agentview
+  - robot0_eye_in_hand
+  env_target: franka_libero_libero_90_14_low_level
+  privileged: false
+  seed_policy:
+    mode: fixed
+    seeds:
+    - 1
+- task_id: libero_90_15
+  embodiment: franka
+  simulator: libero
+  instruction: Put the middle black bowl on top of the cabinet. Quaternions are WXYZ.
+  camera_names:
+  - agentview
+  - robot0_eye_in_hand
+  env_target: franka_libero_libero_90_15_low_level
+  privileged: false
+  seed_policy:
+    mode: fixed
+    seeds:
+    - 1
+- task_id: libero_90_16
+  embodiment: franka
+  simulator: libero
+  instruction: Stack the black bowl at the front on the black bowl in the middle. Quaternions are WXYZ.
+  camera_names:
+  - agentview
+  - robot0_eye_in_hand
+  env_target: franka_libero_libero_90_16_low_level
+  privileged: false
+  seed_policy:
+    mode: fixed
+    seeds:
+    - 1
+- task_id: libero_90_17
+  embodiment: franka
+  simulator: libero
+  instruction: Stack the middle black bowl on the back black bowl. Quaternions are WXYZ.
+  camera_names:
+  - agentview
+  - robot0_eye_in_hand
+  env_target: franka_libero_libero_90_17_low_level
+  privileged: false
+  seed_policy:
+    mode: fixed
+    seeds:
+    - 1
+- task_id: libero_90_18
+  embodiment: franka
+  simulator: libero
+  instruction: Put the frying pan on the stove. Quaternions are WXYZ.
+  camera_names:
+  - agentview
+  - robot0_eye_in_hand
+  env_target: franka_libero_libero_90_18_low_level
+  privileged: false
+  seed_policy:
+    mode: fixed
+    seeds:
+    - 1
+- task_id: libero_90_19
+  embodiment: franka
+  simulator: libero
+  instruction: Put the moka pot on the stove. Quaternions are WXYZ.
+  camera_names:
+  - agentview
+  - robot0_eye_in_hand
+  env_target: franka_libero_libero_90_19_low_level
+  privileged: false
+  seed_policy:
+    mode: fixed
+    seeds:
+    - 1
+- task_id: libero_90_20
+  embodiment: franka
+  simulator: libero
+  instruction: Turn on the stove. Quaternions are WXYZ.
+  camera_names:
+  - agentview
+  - robot0_eye_in_hand
+  env_target: franka_libero_libero_90_20_low_level
+  privileged: false
+  seed_policy:
+    mode: fixed
+    seeds:
+    - 1
+- task_id: libero_90_21
+  embodiment: franka
+  simulator: libero
+  instruction: Turn on the stove and put the frying pan on it. Quaternions are WXYZ.
+  camera_names:
+  - agentview
+  - robot0_eye_in_hand
+  env_target: franka_libero_libero_90_21_low_level
+  privileged: false
+  seed_policy:
+    mode: fixed
+    seeds:
+    - 1
+- task_id: libero_90_22
+  embodiment: franka
+  simulator: libero
+  instruction: Close the bottom drawer of the cabinet. Quaternions are WXYZ.
+  camera_names:
+  - agentview
+  - robot0_eye_in_hand
+  env_target: franka_libero_libero_90_22_low_level
+  privileged: false
+  seed_policy:
+    mode: fixed
+    seeds:
+    - 1
+- task_id: libero_90_23
+  embodiment: franka
+  simulator: libero
+  instruction: Close the bottom drawer of the cabinet and open the top drawer. Quaternions are WXYZ.
+  camera_names:
+  - agentview
+  - robot0_eye_in_hand
+  env_target: franka_libero_libero_90_23_low_level
+  privileged: false
+  seed_policy:
+    mode: fixed
+    seeds:
+    - 1
+- task_id: libero_90_24
+  embodiment: franka
+  simulator: libero
+  instruction: Put the black bowl in the bottom drawer of the cabinet. Quaternions are WXYZ.
+  camera_names:
+  - agentview
+  - robot0_eye_in_hand
+  env_target: franka_libero_libero_90_24_low_level
+  privileged: false
+  seed_policy:
+    mode: fixed
+    seeds:
+    - 1
+- task_id: libero_90_25
+  embodiment: franka
+  simulator: libero
+  instruction: Put the black bowl on top of the cabinet. Quaternions are WXYZ.
+  camera_names:
+  - agentview
+  - robot0_eye_in_hand
+  env_target: franka_libero_libero_90_25_low_level
+  privileged: false
+  seed_policy:
+    mode: fixed
+    seeds:
+    - 1
+- task_id: libero_90_26
+  embodiment: franka
+  simulator: libero
+  instruction: Put the wine bottle in the bottom drawer of the cabinet. Quaternions are WXYZ.
+  camera_names:
+  - agentview
+  - robot0_eye_in_hand
+  env_target: franka_libero_libero_90_26_low_level
+  privileged: false
+  seed_policy:
+    mode: fixed
+    seeds:
+    - 1
+- task_id: libero_90_27
+  embodiment: franka
+  simulator: libero
+  instruction: Put the wine bottle on the wine rack. Quaternions are WXYZ.
+  camera_names:
+  - agentview
+  - robot0_eye_in_hand
+  env_target: franka_libero_libero_90_27_low_level
+  privileged: false
+  seed_policy:
+    mode: fixed
+    seeds:
+    - 1
+- task_id: libero_90_28
+  embodiment: franka
+  simulator: libero
+  instruction: Close the top drawer of the cabinet. Quaternions are WXYZ.
+  camera_names:
+  - agentview
+  - robot0_eye_in_hand
+  env_target: franka_libero_libero_90_28_low_level
+  privileged: false
+  seed_policy:
+    mode: fixed
+    seeds:
+    - 1
+- task_id: libero_90_29
+  embodiment: franka
+  simulator: libero
+  instruction: Put the black bowl in the top drawer of the cabinet. Quaternions are WXYZ.
+  camera_names:
+  - agentview
+  - robot0_eye_in_hand
+  env_target: franka_libero_libero_90_29_low_level
+  privileged: false
+  seed_policy:
+    mode: fixed
+    seeds:
+    - 1
+- task_id: libero_90_30
+  embodiment: franka
+  simulator: libero
+  instruction: Put the black bowl on the plate. Quaternions are WXYZ.
+  camera_names:
+  - agentview
+  - robot0_eye_in_hand
+  env_target: franka_libero_libero_90_30_low_level
+  privileged: false
+  seed_policy:
+    mode: fixed
+    seeds:
+    - 1
+- task_id: libero_90_31
+  embodiment: franka
+  simulator: libero
+  instruction: Put the black bowl on top of the cabinet. Quaternions are WXYZ.
+  camera_names:
+  - agentview
+  - robot0_eye_in_hand
+  env_target: franka_libero_libero_90_31_low_level
+  privileged: false
+  seed_policy:
+    mode: fixed
+    seeds:
+    - 1
+- task_id: libero_90_32
+  embodiment: franka
+  simulator: libero
+  instruction: Put the ketchup in the top drawer of the cabinet. Quaternions are WXYZ.
+  camera_names:
+  - agentview
+  - robot0_eye_in_hand
+  env_target: franka_libero_libero_90_32_low_level
+  privileged: false
+  seed_policy:
+    mode: fixed
+    seeds:
+    - 1
+- task_id: libero_90_33
+  embodiment: franka
+  simulator: libero
+  instruction: Close the microwave. Quaternions are WXYZ.
+  camera_names:
+  - agentview
+  - robot0_eye_in_hand
+  env_target: franka_libero_libero_90_33_low_level
+  privileged: false
+  seed_policy:
+    mode: fixed
+    seeds:
+    - 1
+- task_id: libero_90_34
+  embodiment: franka
+  simulator: libero
+  instruction: Put the yellow and white mug to the front of the white mug. Quaternions are WXYZ.
+  camera_names:
+  - agentview
+  - robot0_eye_in_hand
+  env_target: franka_libero_libero_90_34_low_level
+  privileged: false
+  seed_policy:
+    mode: fixed
+    seeds:
+    - 1
+- task_id: libero_90_35
+  embodiment: franka
+  simulator: libero
+  instruction: Open the microwave. Quaternions are WXYZ.
+  camera_names:
+  - agentview
+  - robot0_eye_in_hand
+  env_target: franka_libero_libero_90_35_low_level
+  privileged: false
+  seed_policy:
+    mode: fixed
+    seeds:
+    - 1
+- task_id: libero_90_36
+  embodiment: franka
+  simulator: libero
+  instruction: Put the white bowl on the plate. Quaternions are WXYZ.
+  camera_names:
+  - agentview
+  - robot0_eye_in_hand
+  env_target: franka_libero_libero_90_36_low_level
+  privileged: false
+  seed_policy:
+    mode: fixed
+    seeds:
+    - 1
+- task_id: libero_90_37
+  embodiment: franka
+  simulator: libero
+  instruction: Put the white bowl to the right of the plate. Quaternions are WXYZ.
+  camera_names:
+  - agentview
+  - robot0_eye_in_hand
+  env_target: franka_libero_libero_90_37_low_level
+  privileged: false
+  seed_policy:
+    mode: fixed
+    seeds:
+    - 1
+- task_id: libero_90_38
+  embodiment: franka
+  simulator: libero
+  instruction: Put the right moka pot on the stove. Quaternions are WXYZ.
+  camera_names:
+  - agentview
+  - robot0_eye_in_hand
+  env_target: franka_libero_libero_90_38_low_level
+  privileged: false
+  seed_policy:
+    mode: fixed
+    seeds:
+    - 1
+- task_id: libero_90_39
+  embodiment: franka
+  simulator: libero
+  instruction: Turn off the stove. Quaternions are WXYZ.
+  camera_names:
+  - agentview
+  - robot0_eye_in_hand
+  env_target: franka_libero_libero_90_39_low_level
+  privileged: false
+  seed_policy:
+    mode: fixed
+    seeds:
+    - 1
+- task_id: libero_90_40
+  embodiment: franka
+  simulator: libero
+  instruction: Put the frying pan on the cabinet shelf. Quaternions are WXYZ.
+  camera_names:
+  - agentview
+  - robot0_eye_in_hand
+  env_target: franka_libero_libero_90_40_low_level
+  privileged: false
+  seed_policy:
+    mode: fixed
+    seeds:
+    - 1
+- task_id: libero_90_41
+  embodiment: franka
+  simulator: libero
+  instruction: Put the frying pan on top of the cabinet. Quaternions are WXYZ.
+  camera_names:
+  - agentview
+  - robot0_eye_in_hand
+  env_target: franka_libero_libero_90_41_low_level
+  privileged: false
+  seed_policy:
+    mode: fixed
+    seeds:
+    - 1
+- task_id: libero_90_42
+  embodiment: franka
+  simulator: libero
+  instruction: Put the frying pan under the cabinet shelf. Quaternions are WXYZ.
+  camera_names:
+  - agentview
+  - robot0_eye_in_hand
+  env_target: franka_libero_libero_90_42_low_level
+  privileged: false
+  seed_policy:
+    mode: fixed
+    seeds:
+    - 1
+- task_id: libero_90_43
+  embodiment: franka
+  simulator: libero
+  instruction: Put the white bowl on top of the cabinet. Quaternions are WXYZ.
+  camera_names:
+  - agentview
+  - robot0_eye_in_hand
+  env_target: franka_libero_libero_90_43_low_level
+  privileged: false
+  seed_policy:
+    mode: fixed
+    seeds:
+    - 1
+- task_id: libero_90_44
+  embodiment: franka
+  simulator: libero
+  instruction: Turn on the stove. Quaternions are WXYZ.
+  camera_names:
+  - agentview
+  - robot0_eye_in_hand
+  env_target: franka_libero_libero_90_44_low_level
+  privileged: false
+  seed_policy:
+    mode: fixed
+    seeds:
+    - 1
+- task_id: libero_90_45
+  embodiment: franka
+  simulator: libero
+  instruction: Turn on the stove and put the frying pan on it. Quaternions are WXYZ.
+  camera_names:
+  - agentview
+  - robot0_eye_in_hand
+  env_target: franka_libero_libero_90_45_low_level
+  privileged: false
+  seed_policy:
+    mode: fixed
+    seeds:
+    - 1
+- task_id: libero_90_46
+  embodiment: franka
+  simulator: libero
+  instruction: Pick up the alphabet soup and put it in the basket. Quaternions are WXYZ.
+  camera_names:
+  - agentview
+  - robot0_eye_in_hand
+  env_target: franka_libero_libero_90_46_low_level
+  privileged: false
+  seed_policy:
+    mode: fixed
+    seeds:
+    - 1
+- task_id: libero_90_47
+  embodiment: franka
+  simulator: libero
+  instruction: Pick up the cream cheese box and put it in the basket. Quaternions are WXYZ.
+  camera_names:
+  - agentview
+  - robot0_eye_in_hand
+  env_target: franka_libero_libero_90_47_low_level
+  privileged: false
+  seed_policy:
+    mode: fixed
+    seeds:
+    - 1
+- task_id: libero_90_48
+  embodiment: franka
+  simulator: libero
+  instruction: Pick up the ketchup and put it in the basket. Quaternions are WXYZ.
+  camera_names:
+  - agentview
+  - robot0_eye_in_hand
+  env_target: franka_libero_libero_90_48_low_level
+  privileged: false
+  seed_policy:
+    mode: fixed
+    seeds:
+    - 1
+- task_id: libero_90_49
+  embodiment: franka
+  simulator: libero
+  instruction: Pick up the tomato sauce and put it in the basket. Quaternions are WXYZ.
+  camera_names:
+  - agentview
+  - robot0_eye_in_hand
+  env_target: franka_libero_libero_90_49_low_level
+  privileged: false
+  seed_policy:
+    mode: fixed
+    seeds:
+    - 1
+- task_id: libero_90_50
+  embodiment: franka
+  simulator: libero
+  instruction: Pick up the alphabet soup and put it in the basket. Quaternions are WXYZ.
+  camera_names:
+  - agentview
+  - robot0_eye_in_hand
+  env_target: franka_libero_libero_90_50_low_level
+  privileged: false
+  seed_policy:
+    mode: fixed
+    seeds:
+    - 1
+- task_id: libero_90_51
+  embodiment: franka
+  simulator: libero
+  instruction: Pick up the butter and put it in the basket. Quaternions are WXYZ.
+  camera_names:
+  - agentview
+  - robot0_eye_in_hand
+  env_target: franka_libero_libero_90_51_low_level
+  privileged: false
+  seed_policy:
+    mode: fixed
+    seeds:
+    - 1
+- task_id: libero_90_52
+  embodiment: franka
+  simulator: libero
+  instruction: Pick up the milk and put it in the basket. Quaternions are WXYZ.
+  camera_names:
+  - agentview
+  - robot0_eye_in_hand
+  env_target: franka_libero_libero_90_52_low_level
+  privileged: false
+  seed_policy:
+    mode: fixed
+    seeds:
+    - 1
+- task_id: libero_90_53
+  embodiment: franka
+  simulator: libero
+  instruction: Pick up the orange juice and put it in the basket. Quaternions are WXYZ.
+  camera_names:
+  - agentview
+  - robot0_eye_in_hand
+  env_target: franka_libero_libero_90_53_low_level
+  privileged: false
+  seed_policy:
+    mode: fixed
+    seeds:
+    - 1
+- task_id: libero_90_54
+  embodiment: franka
+  simulator: libero
+  instruction: Pick up the tomato sauce and put it in the basket. Quaternions are WXYZ.
+  camera_names:
+  - agentview
+  - robot0_eye_in_hand
+  env_target: franka_libero_libero_90_54_low_level
+  privileged: false
+  seed_policy:
+    mode: fixed
+    seeds:
+    - 1
+- task_id: libero_90_55
+  embodiment: franka
+  simulator: libero
+  instruction: Pick up the alphabet soup and put it in the tray. Quaternions are WXYZ.
+  camera_names:
+  - agentview
+  - robot0_eye_in_hand
+  env_target: franka_libero_libero_90_55_low_level
+  privileged: false
+  seed_policy:
+    mode: fixed
+    seeds:
+    - 1
+- task_id: libero_90_56
+  embodiment: franka
+  simulator: libero
+  instruction: Pick up the butter and put it in the tray. Quaternions are WXYZ.
+  camera_names:
+  - agentview
+  - robot0_eye_in_hand
+  env_target: franka_libero_libero_90_56_low_level
+  privileged: false
+  seed_policy:
+    mode: fixed
+    seeds:
+    - 1
+- task_id: libero_90_57
+  embodiment: franka
+  simulator: libero
+  instruction: Pick up the cream cheese and put it in the tray. Quaternions are WXYZ.
+  camera_names:
+  - agentview
+  - robot0_eye_in_hand
+  env_target: franka_libero_libero_90_57_low_level
+  privileged: false
+  seed_policy:
+    mode: fixed
+    seeds:
+    - 1
+- task_id: libero_90_58
+  embodiment: franka
+  simulator: libero
+  instruction: Pick up the ketchup and put it in the tray. Quaternions are WXYZ.
+  camera_names:
+  - agentview
+  - robot0_eye_in_hand
+  env_target: franka_libero_libero_90_58_low_level
+  privileged: false
+  seed_policy:
+    mode: fixed
+    seeds:
+    - 1
+- task_id: libero_90_59
+  embodiment: franka
+  simulator: libero
+  instruction: Pick up the tomato sauce and put it in the tray. Quaternions are WXYZ.
+  camera_names:
+  - agentview
+  - robot0_eye_in_hand
+  env_target: franka_libero_libero_90_59_low_level
+  privileged: false
+  seed_policy:
+    mode: fixed
+    seeds:
+    - 1
+- task_id: libero_90_60
+  embodiment: franka
+  simulator: libero
+  instruction: Pick up the black bowl on the left and put it in the tray. Quaternions are WXYZ.
+  camera_names:
+  - agentview
+  - robot0_eye_in_hand
+  env_target: franka_libero_libero_90_60_low_level
+  privileged: false
+  seed_policy:
+    mode: fixed
+    seeds:
+    - 1
+- task_id: libero_90_61
+  embodiment: franka
+  simulator: libero
+  instruction: Pick up the chocolate pudding and put it in the tray. Quaternions are WXYZ.
+  camera_names:
+  - agentview
+  - robot0_eye_in_hand
+  env_target: franka_libero_libero_90_61_low_level
+  privileged: false
+  seed_policy:
+    mode: fixed
+    seeds:
+    - 1
+- task_id: libero_90_62
+  embodiment: franka
+  simulator: libero
+  instruction: Pick up the salad dressing and put it in the tray. Quaternions are WXYZ.
+  camera_names:
+  - agentview
+  - robot0_eye_in_hand
+  env_target: franka_libero_libero_90_62_low_level
+  privileged: false
+  seed_policy:
+    mode: fixed
+    seeds:
+    - 1
+- task_id: libero_90_63
+  embodiment: franka
+  simulator: libero
+  instruction: Stack the left bowl on the right bowl and place them in the tray. Quaternions are WXYZ.
+  camera_names:
+  - agentview
+  - robot0_eye_in_hand
+  env_target: franka_libero_libero_90_63_low_level
+  privileged: false
+  seed_policy:
+    mode: fixed
+    seeds:
+    - 1
+- task_id: libero_90_64
+  embodiment: franka
+  simulator: libero
+  instruction: Stack the right bowl on the left bowl and place them in the tray. Quaternions are WXYZ.
+  camera_names:
+  - agentview
+  - robot0_eye_in_hand
+  env_target: franka_libero_libero_90_64_low_level
+  privileged: false
+  seed_policy:
+    mode: fixed
+    seeds:
+    - 1
+- task_id: libero_90_65
+  embodiment: franka
+  simulator: libero
+  instruction: Put the red mug on the left plate. Quaternions are WXYZ.
+  camera_names:
+  - agentview
+  - robot0_eye_in_hand
+  env_target: franka_libero_libero_90_65_low_level
+  privileged: false
+  seed_policy:
+    mode: fixed
+    seeds:
+    - 1
+- task_id: libero_90_66
+  embodiment: franka
+  simulator: libero
+  instruction: Put the red mug on the right plate. Quaternions are WXYZ.
+  camera_names:
+  - agentview
+  - robot0_eye_in_hand
+  env_target: franka_libero_libero_90_66_low_level
+  privileged: false
+  seed_policy:
+    mode: fixed
+    seeds:
+    - 1
+- task_id: libero_90_67
+  embodiment: franka
+  simulator: libero
+  instruction: Put the white mug on the left plate. Quaternions are WXYZ.
+  camera_names:
+  - agentview
+  - robot0_eye_in_hand
+  env_target: franka_libero_libero_90_67_low_level
+  privileged: false
+  seed_policy:
+    mode: fixed
+    seeds:
+    - 1
+- task_id: libero_90_68
+  embodiment: franka
+  simulator: libero
+  instruction: Put the yellow and white mug on the right plate. Quaternions are WXYZ.
+  camera_names:
+  - agentview
+  - robot0_eye_in_hand
+  env_target: franka_libero_libero_90_68_low_level
+  privileged: false
+  seed_policy:
+    mode: fixed
+    seeds:
+    - 1
+- task_id: libero_90_69
+  embodiment: franka
+  simulator: libero
+  instruction: Put the chocolate pudding to the left of the plate. Quaternions are WXYZ.
+  camera_names:
+  - agentview
+  - robot0_eye_in_hand
+  env_target: franka_libero_libero_90_69_low_level
+  privileged: false
+  seed_policy:
+    mode: fixed
+    seeds:
+    - 1
+- task_id: libero_90_70
+  embodiment: franka
+  simulator: libero
+  instruction: Put the chocolate pudding to the right of the plate. Quaternions are WXYZ.
+  camera_names:
+  - agentview
+  - robot0_eye_in_hand
+  env_target: franka_libero_libero_90_70_low_level
+  privileged: false
+  seed_policy:
+    mode: fixed
+    seeds:
+    - 1
+- task_id: libero_90_71
+  embodiment: franka
+  simulator: libero
+  instruction: Put the red mug on the plate. Quaternions are WXYZ.
+  camera_names:
+  - agentview
+  - robot0_eye_in_hand
+  env_target: franka_libero_libero_90_71_low_level
+  privileged: false
+  seed_policy:
+    mode: fixed
+    seeds:
+    - 1
+- task_id: libero_90_72
+  embodiment: franka
+  simulator: libero
+  instruction: Put the white mug on the plate. Quaternions are WXYZ.
+  camera_names:
+  - agentview
+  - robot0_eye_in_hand
+  env_target: franka_libero_libero_90_72_low_level
+  privileged: false
+  seed_policy:
+    mode: fixed
+    seeds:
+    - 1
+- task_id: libero_90_73
+  embodiment: franka
+  simulator: libero
+  instruction: Pick up the book and place it in the front compartment of the caddy. Quaternions are WXYZ.
+  camera_names:
+  - agentview
+  - robot0_eye_in_hand
+  env_target: franka_libero_libero_90_73_low_level
+  privileged: false
+  seed_policy:
+    mode: fixed
+    seeds:
+    - 1
+- task_id: libero_90_74
+  embodiment: franka
+  simulator: libero
+  instruction: Pick up the book and place it in the left compartment of the caddy. Quaternions are WXYZ.
+  camera_names:
+  - agentview
+  - robot0_eye_in_hand
+  env_target: franka_libero_libero_90_74_low_level
+  privileged: false
+  seed_policy:
+    mode: fixed
+    seeds:
+    - 1
+- task_id: libero_90_75
+  embodiment: franka
+  simulator: libero
+  instruction: Pick up the book and place it in the right compartment of the caddy. Quaternions are WXYZ.
+  camera_names:
+  - agentview
+  - robot0_eye_in_hand
+  env_target: franka_libero_libero_90_75_low_level
+  privileged: false
+  seed_policy:
+    mode: fixed
+    seeds:
+    - 1
+- task_id: libero_90_76
+  embodiment: franka
+  simulator: libero
+  instruction: Pick up the yellow and white mug and place it to the right of the caddy. Quaternions are
+    WXYZ.
+  camera_names:
+  - agentview
+  - robot0_eye_in_hand
+  env_target: franka_libero_libero_90_76_low_level
+  privileged: false
+  seed_policy:
+    mode: fixed
+    seeds:
+    - 1
+- task_id: libero_90_77
+  embodiment: franka
+  simulator: libero
+  instruction: Pick up the book and place it in the back compartment of the caddy. Quaternions are WXYZ.
+  camera_names:
+  - agentview
+  - robot0_eye_in_hand
+  env_target: franka_libero_libero_90_77_low_level
+  privileged: false
+  seed_policy:
+    mode: fixed
+    seeds:
+    - 1
+- task_id: libero_90_78
+  embodiment: franka
+  simulator: libero
+  instruction: Pick up the book and place it in the front compartment of the caddy. Quaternions are WXYZ.
+  camera_names:
+  - agentview
+  - robot0_eye_in_hand
+  env_target: franka_libero_libero_90_78_low_level
+  privileged: false
+  seed_policy:
+    mode: fixed
+    seeds:
+    - 1
+- task_id: libero_90_79
+  embodiment: franka
+  simulator: libero
+  instruction: Pick up the book and place it in the left compartment of the caddy. Quaternions are WXYZ.
+  camera_names:
+  - agentview
+  - robot0_eye_in_hand
+  env_target: franka_libero_libero_90_79_low_level
+  privileged: false
+  seed_policy:
+    mode: fixed
+    seeds:
+    - 1
+- task_id: libero_90_80
+  embodiment: franka
+  simulator: libero
+  instruction: Pick up the book and place it in the right compartment of the caddy. Quaternions are WXYZ.
+  camera_names:
+  - agentview
+  - robot0_eye_in_hand
+  env_target: franka_libero_libero_90_80_low_level
+  privileged: false
+  seed_policy:
+    mode: fixed
+    seeds:
+    - 1
+- task_id: libero_90_81
+  embodiment: franka
+  simulator: libero
+  instruction: Pick up the book and place it in the front compartment of the caddy. Quaternions are WXYZ.
+  camera_names:
+  - agentview
+  - robot0_eye_in_hand
+  env_target: franka_libero_libero_90_81_low_level
+  privileged: false
+  seed_policy:
+    mode: fixed
+    seeds:
+    - 1
+- task_id: libero_90_82
+  embodiment: franka
+  simulator: libero
+  instruction: Pick up the book and place it in the left compartment of the caddy. Quaternions are WXYZ.
+  camera_names:
+  - agentview
+  - robot0_eye_in_hand
+  env_target: franka_libero_libero_90_82_low_level
+  privileged: false
+  seed_policy:
+    mode: fixed
+    seeds:
+    - 1
+- task_id: libero_90_83
+  embodiment: franka
+  simulator: libero
+  instruction: Pick up the book and place it in the right compartment of the caddy. Quaternions are WXYZ.
+  camera_names:
+  - agentview
+  - robot0_eye_in_hand
+  env_target: franka_libero_libero_90_83_low_level
+  privileged: false
+  seed_policy:
+    mode: fixed
+    seeds:
+    - 1
+- task_id: libero_90_84
+  embodiment: franka
+  simulator: libero
+  instruction: Pick up the red mug and place it to the right of the caddy. Quaternions are WXYZ.
+  camera_names:
+  - agentview
+  - robot0_eye_in_hand
+  env_target: franka_libero_libero_90_84_low_level
+  privileged: false
+  seed_policy:
+    mode: fixed
+    seeds:
+    - 1
+- task_id: libero_90_85
+  embodiment: franka
+  simulator: libero
+  instruction: Pick up the white mug and place it to the right of the caddy. Quaternions are WXYZ.
+  camera_names:
+  - agentview
+  - robot0_eye_in_hand
+  env_target: franka_libero_libero_90_85_low_level
+  privileged: false
+  seed_policy:
+    mode: fixed
+    seeds:
+    - 1
+- task_id: libero_90_86
+  embodiment: franka
+  simulator: libero
+  instruction: Pick up the book in the middle and place it on the cabinet shelf. Quaternions are WXYZ.
+  camera_names:
+  - agentview
+  - robot0_eye_in_hand
+  env_target: franka_libero_libero_90_86_low_level
+  privileged: false
+  seed_policy:
+    mode: fixed
+    seeds:
+    - 1
+- task_id: libero_90_87
+  embodiment: franka
+  simulator: libero
+  instruction: Pick up the book on the left and place it on top of the shelf. Quaternions are WXYZ.
+  camera_names:
+  - agentview
+  - robot0_eye_in_hand
+  env_target: franka_libero_libero_90_87_low_level
+  privileged: false
+  seed_policy:
+    mode: fixed
+    seeds:
+    - 1
+- task_id: libero_90_88
+  embodiment: franka
+  simulator: libero
+  instruction: Pick up the book on the right and place it on the cabinet shelf. Quaternions are WXYZ.
+  camera_names:
+  - agentview
+  - robot0_eye_in_hand
+  env_target: franka_libero_libero_90_88_low_level
+  privileged: false
+  seed_policy:
+    mode: fixed
+    seeds:
+    - 1
+- task_id: libero_90_89
+  embodiment: franka
+  simulator: libero
+  instruction: Pick up the book on the right and place it under the cabinet shelf. Quaternions are WXYZ.
+  camera_names:
+  - agentview
+  - robot0_eye_in_hand
+  env_target: franka_libero_libero_90_89_low_level
+  privileged: false
+  seed_policy:
+    mode: fixed
+    seeds:
+    - 1
+- task_id: libero_object_0
+  embodiment: franka
+  simulator: libero
+  instruction: Pick up the alphabet soup and place it in the basket. Quaternions are WXYZ.
+  camera_names:
+  - agentview
+  - robot0_eye_in_hand
+  env_target: franka_libero_libero_object_0_low_level
+  privileged: false
+  seed_policy:
+    mode: fixed
+    seeds:
+    - 1
+- task_id: libero_object_1
+  embodiment: franka
+  simulator: libero
+  instruction: Pick up the cream cheese and place it in the basket. Quaternions are WXYZ.
+  camera_names:
+  - agentview
+  - robot0_eye_in_hand
+  env_target: franka_libero_libero_object_1_low_level
+  privileged: false
+  seed_policy:
+    mode: fixed
+    seeds:
+    - 1
+- task_id: libero_object_2
+  embodiment: franka
+  simulator: libero
+  instruction: Pick up the salad dressing and place it in the basket. Quaternions are WXYZ.
+  camera_names:
+  - agentview
+  - robot0_eye_in_hand
+  env_target: franka_libero_libero_object_2_low_level
+  privileged: false
+  seed_policy:
+    mode: fixed
+    seeds:
+    - 1
+- task_id: libero_object_3
+  embodiment: franka
+  simulator: libero
+  instruction: Pick up the bbq sauce and place it in the basket. Quaternions are WXYZ.
+  camera_names:
+  - agentview
+  - robot0_eye_in_hand
+  env_target: franka_libero_libero_object_3_low_level
+  privileged: false
+  seed_policy:
+    mode: fixed
+    seeds:
+    - 1
+- task_id: libero_object_4
+  embodiment: franka
+  simulator: libero
+  instruction: Pick up the ketchup and place it in the basket. Quaternions are WXYZ.
+  camera_names:
+  - agentview
+  - robot0_eye_in_hand
+  env_target: franka_libero_libero_object_4_low_level
+  privileged: false
+  seed_policy:
+    mode: fixed
+    seeds:
+    - 1
+- task_id: libero_object_5
+  embodiment: franka
+  simulator: libero
+  instruction: Pick up the tomato sauce and place it in the basket. Quaternions are WXYZ.
+  camera_names:
+  - agentview
+  - robot0_eye_in_hand
+  env_target: franka_libero_libero_object_5_low_level
+  privileged: false
+  seed_policy:
+    mode: fixed
+    seeds:
+    - 1
+- task_id: libero_object_6
+  embodiment: franka
+  simulator: libero
+  instruction: Pick up the butter and place it in the basket. Quaternions are WXYZ.
+  camera_names:
+  - agentview
+  - robot0_eye_in_hand
+  env_target: franka_libero_libero_object_6_low_level
+  privileged: false
+  seed_policy:
+    mode: fixed
+    seeds:
+    - 1
+- task_id: libero_object_7
+  embodiment: franka
+  simulator: libero
+  instruction: Pick up the milk and place it in the basket. Quaternions are WXYZ.
+  camera_names:
+  - agentview
+  - robot0_eye_in_hand
+  env_target: franka_libero_libero_object_7_low_level
+  privileged: false
+  seed_policy:
+    mode: fixed
+    seeds:
+    - 1
+- task_id: libero_object_8
+  embodiment: franka
+  simulator: libero
+  instruction: Pick up the chocolate pudding and place it in the basket. Quaternions are WXYZ.
+  camera_names:
+  - agentview
+  - robot0_eye_in_hand
+  env_target: franka_libero_libero_object_8_low_level
+  privileged: false
+  seed_policy:
+    mode: fixed
+    seeds:
+    - 1
+- task_id: libero_object_9
+  embodiment: franka
+  simulator: libero
+  instruction: Pick up the orange juice and place it in the basket. Quaternions are WXYZ.
+  camera_names:
+  - agentview
+  - robot0_eye_in_hand
+  env_target: franka_libero_libero_object_9_low_level
+  privileged: false
+  seed_policy:
+    mode: fixed
+    seeds:
+    - 1
+- task_id: libero_spatial_0
+  embodiment: franka
+  simulator: libero
+  instruction: Pick up the black bowl between the plate and the ramekin and place it on the plate. Quaternions
+    are WXYZ.
+  camera_names:
+  - agentview
+  - robot0_eye_in_hand
+  env_target: franka_libero_libero_spatial_0_low_level
+  privileged: false
+  seed_policy:
+    mode: fixed
+    seeds:
+    - 1
+- task_id: libero_spatial_1
+  embodiment: franka
+  simulator: libero
+  instruction: Pick up the black bowl next to the ramekin and place it on the plate. Quaternions are WXYZ.
+  camera_names:
+  - agentview
+  - robot0_eye_in_hand
+  env_target: franka_libero_libero_spatial_1_low_level
+  privileged: false
+  seed_policy:
+    mode: fixed
+    seeds:
+    - 1
+- task_id: libero_spatial_2
+  embodiment: franka
+  simulator: libero
+  instruction: Pick up the black bowl from table center and place it on the plate. Quaternions are WXYZ.
+  camera_names:
+  - agentview
+  - robot0_eye_in_hand
+  env_target: franka_libero_libero_spatial_2_low_level
+  privileged: false
+  seed_policy:
+    mode: fixed
+    seeds:
+    - 1
+- task_id: libero_spatial_3
+  embodiment: franka
+  simulator: libero
+  instruction: Pick up the black bowl on the cookie box and place it on the plate. Quaternions are WXYZ.
+  camera_names:
+  - agentview
+  - robot0_eye_in_hand
+  env_target: franka_libero_libero_spatial_3_low_level
+  privileged: false
+  seed_policy:
+    mode: fixed
+    seeds:
+    - 1
+- task_id: libero_spatial_4
+  embodiment: franka
+  simulator: libero
+  instruction: Pick up the black bowl in the top drawer of the wooden cabinet and place it on the plate.
+    Quaternions are WXYZ.
+  camera_names:
+  - agentview
+  - robot0_eye_in_hand
+  env_target: franka_libero_libero_spatial_4_low_level
+  privileged: false
+  seed_policy:
+    mode: fixed
+    seeds:
+    - 1
+- task_id: libero_spatial_5
+  embodiment: franka
+  simulator: libero
+  instruction: Pick up the black bowl on the ramekin and place it on the plate. Quaternions are WXYZ.
+  camera_names:
+  - agentview
+  - robot0_eye_in_hand
+  env_target: franka_libero_libero_spatial_5_low_level
+  privileged: false
+  seed_policy:
+    mode: fixed
+    seeds:
+    - 1
+- task_id: libero_spatial_6
+  embodiment: franka
+  simulator: libero
+  instruction: Pick up the black bowl next to the cookie box and place it on the plate. Quaternions are
+    WXYZ.
+  camera_names:
+  - agentview
+  - robot0_eye_in_hand
+  env_target: franka_libero_libero_spatial_6_low_level
+  privileged: false
+  seed_policy:
+    mode: fixed
+    seeds:
+    - 1
+- task_id: libero_spatial_7
+  embodiment: franka
+  simulator: libero
+  instruction: Pick up the black bowl on the stove and place it on the plate. Quaternions are WXYZ.
+  camera_names:
+  - agentview
+  - robot0_eye_in_hand
+  env_target: franka_libero_libero_spatial_7_low_level
+  privileged: false
+  seed_policy:
+    mode: fixed
+    seeds:
+    - 1
+- task_id: libero_spatial_8
+  embodiment: franka
+  simulator: libero
+  instruction: Pick up the black bowl next to the plate and place it on the plate. Quaternions are WXYZ.
+  camera_names:
+  - agentview
+  - robot0_eye_in_hand
+  env_target: franka_libero_libero_spatial_8_low_level
+  privileged: false
+  seed_policy:
+    mode: fixed
+    seeds:
+    - 1
+- task_id: libero_spatial_9
+  embodiment: franka
+  simulator: libero
+  instruction: Pick up the black bowl on the wooden cabinet and place it on the plate. Quaternions are
+    WXYZ.
+  camera_names:
+  - agentview
+  - robot0_eye_in_hand
+  env_target: franka_libero_libero_spatial_9_low_level
+  privileged: false
+  seed_policy:
+    mode: fixed
+    seeds:
+    - 1
+- task_id: libero_goal_0
+  embodiment: franka
+  simulator: libero
+  instruction: Open the middle drawer of the cabinet. Quaternions are WXYZ.
+  camera_names:
+  - agentview
+  - robot0_eye_in_hand
+  env_target: franka_libero_libero_goal_0_low_level
+  privileged: false
+  seed_policy:
+    mode: fixed
+    seeds:
+    - 1
+- task_id: libero_goal_1
+  embodiment: franka
+  simulator: libero
+  instruction: Put the bowl on the stove. Quaternions are WXYZ.
+  camera_names:
+  - agentview
+  - robot0_eye_in_hand
+  env_target: franka_libero_libero_goal_1_low_level
+  privileged: false
+  seed_policy:
+    mode: fixed
+    seeds:
+    - 1
+- task_id: libero_goal_2
+  embodiment: franka
+  simulator: libero
+  instruction: Put the wine bottle on top of the cabinet. Quaternions are WXYZ.
+  camera_names:
+  - agentview
+  - robot0_eye_in_hand
+  env_target: franka_libero_libero_goal_2_low_level
+  privileged: false
+  seed_policy:
+    mode: fixed
+    seeds:
+    - 1
+- task_id: libero_goal_3
+  embodiment: franka
+  simulator: libero
+  instruction: Open the top drawer and put the bowl inside. Quaternions are WXYZ.
+  camera_names:
+  - agentview
+  - robot0_eye_in_hand
+  env_target: franka_libero_libero_goal_3_low_level
+  privileged: false
+  seed_policy:
+    mode: fixed
+    seeds:
+    - 1
+- task_id: libero_goal_4
+  embodiment: franka
+  simulator: libero
+  instruction: Put the bowl on top of the cabinet. Quaternions are WXYZ.
+  camera_names:
+  - agentview
+  - robot0_eye_in_hand
+  env_target: franka_libero_libero_goal_4_low_level
+  privileged: false
+  seed_policy:
+    mode: fixed
+    seeds:
+    - 1
+- task_id: libero_goal_5
+  embodiment: franka
+  simulator: libero
+  instruction: Push the plate to the front of the stove. Quaternions are WXYZ.
+  camera_names:
+  - agentview
+  - robot0_eye_in_hand
+  env_target: franka_libero_libero_goal_5_low_level
+  privileged: false
+  seed_policy:
+    mode: fixed
+    seeds:
+    - 1
+- task_id: libero_goal_6
+  embodiment: franka
+  simulator: libero
+  instruction: Put the cream cheese in the bowl. Quaternions are WXYZ.
+  camera_names:
+  - agentview
+  - robot0_eye_in_hand
+  env_target: franka_libero_libero_goal_6_low_level
+  privileged: false
+  seed_policy:
+    mode: fixed
+    seeds:
+    - 1
+- task_id: libero_goal_7
+  embodiment: franka
+  simulator: libero
+  instruction: Turn on the stove. Quaternions are WXYZ.
+  camera_names:
+  - agentview
+  - robot0_eye_in_hand
+  env_target: franka_libero_libero_goal_7_low_level
+  privileged: false
+  seed_policy:
+    mode: fixed
+    seeds:
+    - 1
+- task_id: libero_goal_8
+  embodiment: franka
+  simulator: libero
+  instruction: Put the bowl on the plate. Quaternions are WXYZ.
+  camera_names:
+  - agentview
+  - robot0_eye_in_hand
+  env_target: franka_libero_libero_goal_8_low_level
+  privileged: false
+  seed_policy:
+    mode: fixed
+    seeds:
+    - 1
+- task_id: libero_goal_9
+  embodiment: franka
+  simulator: libero
+  instruction: Put the wine bottle on the rack. Quaternions are WXYZ.
+  camera_names:
+  - agentview
+  - robot0_eye_in_hand
+  env_target: franka_libero_libero_goal_9_low_level
+  privileged: false
+  seed_policy:
+    mode: fixed
+    seeds:
+    - 1
+- task_id: picking_up_trash
+  embodiment: r1pro
+  simulator: behavior
+  instruction: Find the can of soda on the floor and pick it up.
+  camera_names:
+  - ego
+  - left_wrist
+  - right_wrist
+  env_target: r1pro_b1k_low_level
+  privileged: false
+  seed_policy:
+    mode: fixed
+    seeds:
+    - 0
+- task_id: picking_up_radio
+  embodiment: r1pro
+  simulator: behavior
+  instruction: Pick up the red radio on the table.
+  camera_names:
+  - ego
+  - left_wrist
+  - right_wrist
+  env_target: r1pro_b1k_low_level
+  env_kwargs:
+    controller_cfg: r1pro_primitives_radio.yaml
+  privileged: false
+  seed_policy:
+    mode: fixed
+    seeds:
+    - 0
+- task_id: assembling_gift_baskets
+  embodiment: r1pro
+  simulator: behavior
+  instruction: Assemble the gift baskets.
+  camera_names:
+  - ego
+  - left_wrist
+  - right_wrist
+  env_target: r1pro_b1k_low_level
+  env_kwargs:
+    activity_name: assembling_gift_baskets
+  privileged: false
+  seed_policy:
+    mode: fixed
+    seeds:
+    - 0
+- task_id: attach_a_camera_to_a_tripod
+  embodiment: r1pro
+  simulator: behavior
+  instruction: Attach a camera to a tripod.
+  camera_names:
+  - ego
+  - left_wrist
+  - right_wrist
+  env_target: r1pro_b1k_low_level
+  env_kwargs:
+    activity_name: attach_a_camera_to_a_tripod
+  privileged: false
+  seed_policy:
+    mode: fixed
+    seeds:
+    - 0
+- task_id: boxing_books_up_for_storage
+  embodiment: r1pro
+  simulator: behavior
+  instruction: Box the books up for storage.
+  camera_names:
+  - ego
+  - left_wrist
+  - right_wrist
+  env_target: r1pro_b1k_low_level
+  env_kwargs:
+    activity_name: boxing_books_up_for_storage
+  privileged: false
+  seed_policy:
+    mode: fixed
+    seeds:
+    - 0
+- task_id: bringing_in_wood
+  embodiment: r1pro
+  simulator: behavior
+  instruction: Bring in the wood.
+  camera_names:
+  - ego
+  - left_wrist
+  - right_wrist
+  env_target: r1pro_b1k_low_level
+  env_kwargs:
+    activity_name: bringing_in_wood
+  privileged: false
+  seed_policy:
+    mode: fixed
+    seeds:
+    - 0
+- task_id: bringing_water
+  embodiment: r1pro
+  simulator: behavior
+  instruction: Bring the water.
+  camera_names:
+  - ego
+  - left_wrist
+  - right_wrist
+  env_target: r1pro_b1k_low_level
+  env_kwargs:
+    activity_name: bringing_water
+  privileged: false
+  seed_policy:
+    mode: fixed
+    seeds:
+    - 0
+- task_id: can_meat
+  embodiment: r1pro
+  simulator: behavior
+  instruction: Can the meat.
+  camera_names:
+  - ego
+  - left_wrist
+  - right_wrist
+  env_target: r1pro_b1k_low_level
+  env_kwargs:
+    activity_name: can_meat
+  privileged: false
+  seed_policy:
+    mode: fixed
+    seeds:
+    - 0
+- task_id: canning_food
+  embodiment: r1pro
+  simulator: behavior
+  instruction: Can the food.
+  camera_names:
+  - ego
+  - left_wrist
+  - right_wrist
+  env_target: r1pro_b1k_low_level
+  env_kwargs:
+    activity_name: canning_food
+  privileged: false
+  seed_policy:
+    mode: fixed
+    seeds:
+    - 0
+- task_id: carrying_in_groceries
+  embodiment: r1pro
+  simulator: behavior
+  instruction: Carry in the groceries.
+  camera_names:
+  - ego
+  - left_wrist
+  - right_wrist
+  env_target: r1pro_b1k_low_level
+  env_kwargs:
+    activity_name: carrying_in_groceries
+  privileged: false
+  seed_policy:
+    mode: fixed
+    seeds:
+    - 0
+- task_id: chop_an_onion
+  embodiment: r1pro
+  simulator: behavior
+  instruction: Chop an onion.
+  camera_names:
+  - ego
+  - left_wrist
+  - right_wrist
+  env_target: r1pro_b1k_low_level
+  env_kwargs:
+    activity_name: chop_an_onion
+  privileged: false
+  seed_policy:
+    mode: fixed
+    seeds:
+    - 0
+- task_id: chopping_wood
+  embodiment: r1pro
+  simulator: behavior
+  instruction: Chop the wood.
+  camera_names:
+  - ego
+  - left_wrist
+  - right_wrist
+  env_target: r1pro_b1k_low_level
+  env_kwargs:
+    activity_name: chopping_wood
+  privileged: false
+  seed_policy:
+    mode: fixed
+    seeds:
+    - 0
+- task_id: clean_a_patio
+  embodiment: r1pro
+  simulator: behavior
+  instruction: Clean a patio.
+  camera_names:
+  - ego
+  - left_wrist
+  - right_wrist
+  env_target: r1pro_b1k_low_level
+  env_kwargs:
+    activity_name: clean_a_patio
+  privileged: false
+  seed_policy:
+    mode: fixed
+    seeds:
+    - 0
+- task_id: clean_a_trumpet
+  embodiment: r1pro
+  simulator: behavior
+  instruction: Clean a trumpet.
+  camera_names:
+  - ego
+  - left_wrist
+  - right_wrist
+  env_target: r1pro_b1k_low_level
+  env_kwargs:
+    activity_name: clean_a_trumpet
+  privileged: false
+  seed_policy:
+    mode: fixed
+    seeds:
+    - 0
+- task_id: clean_boxing_gloves
+  embodiment: r1pro
+  simulator: behavior
+  instruction: Clean the boxing gloves.
+  camera_names:
+  - ego
+  - left_wrist
+  - right_wrist
+  env_target: r1pro_b1k_low_level
+  env_kwargs:
+    activity_name: clean_boxing_gloves
+  privileged: false
+  seed_policy:
+    mode: fixed
+    seeds:
+    - 0
+- task_id: clean_up_your_desk
+  embodiment: r1pro
+  simulator: behavior
+  instruction: Clean up your desk.
+  camera_names:
+  - ego
+  - left_wrist
+  - right_wrist
+  env_target: r1pro_b1k_low_level
+  env_kwargs:
+    activity_name: clean_up_your_desk
+  privileged: false
+  seed_policy:
+    mode: fixed
+    seeds:
+    - 0
+- task_id: cleaning_up_plates_and_food
+  embodiment: r1pro
+  simulator: behavior
+  instruction: Clean up the plates and food.
+  camera_names:
+  - ego
+  - left_wrist
+  - right_wrist
+  env_target: r1pro_b1k_low_level
+  env_kwargs:
+    activity_name: cleaning_up_plates_and_food
+  privileged: false
+  seed_policy:
+    mode: fixed
+    seeds:
+    - 0
+- task_id: clearing_food_from_table_into_fridge
+  embodiment: r1pro
+  simulator: behavior
+  instruction: Clear the food from the table into the fridge.
+  camera_names:
+  - ego
+  - left_wrist
+  - right_wrist
+  env_target: r1pro_b1k_low_level
+  env_kwargs:
+    activity_name: clearing_food_from_table_into_fridge
+  privileged: false
+  seed_policy:
+    mode: fixed
+    seeds:
+    - 0
+- task_id: collecting_childrens_toys
+  embodiment: r1pro
+  simulator: behavior
+  instruction: Collect the children's toys.
+  camera_names:
+  - ego
+  - left_wrist
+  - right_wrist
+  env_target: r1pro_b1k_low_level
+  env_kwargs:
+    activity_name: collecting_childrens_toys
+  privileged: false
+  seed_policy:
+    mode: fixed
+    seeds:
+    - 0
+- task_id: cook_bacon
+  embodiment: r1pro
+  simulator: behavior
+  instruction: Cook the bacon.
+  camera_names:
+  - ego
+  - left_wrist
+  - right_wrist
+  env_target: r1pro_b1k_low_level
+  env_kwargs:
+    activity_name: cook_bacon
+  privileged: false
+  seed_policy:
+    mode: fixed
+    seeds:
+    - 0
+- task_id: cook_cabbage
+  embodiment: r1pro
+  simulator: behavior
+  instruction: Cook the cabbage.
+  camera_names:
+  - ego
+  - left_wrist
+  - right_wrist
+  env_target: r1pro_b1k_low_level
+  env_kwargs:
+    activity_name: cook_cabbage
+  privileged: false
+  seed_policy:
+    mode: fixed
+    seeds:
+    - 0
+- task_id: cook_hot_dogs
+  embodiment: r1pro
+  simulator: behavior
+  instruction: Cook the hot dogs.
+  camera_names:
+  - ego
+  - left_wrist
+  - right_wrist
+  env_target: r1pro_b1k_low_level
+  env_kwargs:
+    activity_name: cook_hot_dogs
+  privileged: false
+  seed_policy:
+    mode: fixed
+    seeds:
+    - 0
+- task_id: freeze_pies
+  embodiment: r1pro
+  simulator: behavior
+  instruction: Freeze the pies.
+  camera_names:
+  - ego
+  - left_wrist
+  - right_wrist
+  env_target: r1pro_b1k_low_level
+  env_kwargs:
+    activity_name: freeze_pies
+  privileged: false
+  seed_policy:
+    mode: fixed
+    seeds:
+    - 0
+- task_id: getting_organized_for_work
+  embodiment: r1pro
+  simulator: behavior
+  instruction: Get organized for work.
+  camera_names:
+  - ego
+  - left_wrist
+  - right_wrist
+  env_target: r1pro_b1k_low_level
+  env_kwargs:
+    activity_name: getting_organized_for_work
+  privileged: false
+  seed_policy:
+    mode: fixed
+    seeds:
+    - 0
+- task_id: hanging_pictures
+  embodiment: r1pro
+  simulator: behavior
+  instruction: Hang the pictures.
+  camera_names:
+  - ego
+  - left_wrist
+  - right_wrist
+  env_target: r1pro_b1k_low_level
+  env_kwargs:
+    activity_name: hanging_pictures
+  privileged: false
+  seed_policy:
+    mode: fixed
+    seeds:
+    - 0
+- task_id: hiding_Easter_eggs
+  embodiment: r1pro
+  simulator: behavior
+  instruction: Hide the Easter eggs.
+  camera_names:
+  - ego
+  - left_wrist
+  - right_wrist
+  env_target: r1pro_b1k_low_level
+  env_kwargs:
+    activity_name: hiding_Easter_eggs
+  privileged: false
+  seed_policy:
+    mode: fixed
+    seeds:
+    - 0
+- task_id: loading_the_car
+  embodiment: r1pro
+  simulator: behavior
+  instruction: Load the car.
+  camera_names:
+  - ego
+  - left_wrist
+  - right_wrist
+  env_target: r1pro_b1k_low_level
+  env_kwargs:
+    activity_name: loading_the_car
+  privileged: false
+  seed_policy:
+    mode: fixed
+    seeds:
+    - 0
+- task_id: make_microwave_popcorn
+  embodiment: r1pro
+  simulator: behavior
+  instruction: Make microwave popcorn.
+  camera_names:
+  - ego
+  - left_wrist
+  - right_wrist
+  env_target: r1pro_b1k_low_level
+  env_kwargs:
+    activity_name: make_microwave_popcorn
+  privileged: false
+  seed_policy:
+    mode: fixed
+    seeds:
+    - 0
+- task_id: make_pizza
+  embodiment: r1pro
+  simulator: behavior
+  instruction: Make pizza.
+  camera_names:
+  - ego
+  - left_wrist
+  - right_wrist
+  env_target: r1pro_b1k_low_level
+  env_kwargs:
+    activity_name: make_pizza
+  privileged: false
+  seed_policy:
+    mode: fixed
+    seeds:
+    - 0
+- task_id: moving_boxes_to_storage
+  embodiment: r1pro
+  simulator: behavior
+  instruction: Move the boxes to storage.
+  camera_names:
+  - ego
+  - left_wrist
+  - right_wrist
+  env_target: r1pro_b1k_low_level
+  env_kwargs:
+    activity_name: moving_boxes_to_storage
+  privileged: false
+  seed_policy:
+    mode: fixed
+    seeds:
+    - 0
+- task_id: outfit_a_basic_toolbox
+  embodiment: r1pro
+  simulator: behavior
+  instruction: Outfit a basic toolbox.
+  camera_names:
+  - ego
+  - left_wrist
+  - right_wrist
+  env_target: r1pro_b1k_low_level
+  env_kwargs:
+    activity_name: outfit_a_basic_toolbox
+  privileged: false
+  seed_policy:
+    mode: fixed
+    seeds:
+    - 0
+- task_id: picking_up_toys
+  embodiment: r1pro
+  simulator: behavior
+  instruction: Pick up the toys.
+  camera_names:
+  - ego
+  - left_wrist
+  - right_wrist
+  env_target: r1pro_b1k_low_level
+  env_kwargs:
+    activity_name: picking_up_toys
+  privileged: false
+  seed_policy:
+    mode: fixed
+    seeds:
+    - 0
+- task_id: preparing_lunch_box
+  embodiment: r1pro
+  simulator: behavior
+  instruction: Prepare the lunch box.
+  camera_names:
+  - ego
+  - left_wrist
+  - right_wrist
+  env_target: r1pro_b1k_low_level
+  env_kwargs:
+    activity_name: preparing_lunch_box
+  privileged: false
+  seed_policy:
+    mode: fixed
+    seeds:
+    - 0
+- task_id: putting_away_Halloween_decorations
+  embodiment: r1pro
+  simulator: behavior
+  instruction: Put away the Halloween decorations.
+  camera_names:
+  - ego
+  - left_wrist
+  - right_wrist
+  env_target: r1pro_b1k_low_level
+  env_kwargs:
+    activity_name: putting_away_Halloween_decorations
+  privileged: false
+  seed_policy:
+    mode: fixed
+    seeds:
+    - 0
+- task_id: putting_dishes_away_after_cleaning
+  embodiment: r1pro
+  simulator: behavior
+  instruction: Put the dishes away after cleaning.
+  camera_names:
+  - ego
+  - left_wrist
+  - right_wrist
+  env_target: r1pro_b1k_low_level
+  env_kwargs:
+    activity_name: putting_dishes_away_after_cleaning
+  privileged: false
+  seed_policy:
+    mode: fixed
+    seeds:
+    - 0
+- task_id: putting_shoes_on_rack
+  embodiment: r1pro
+  simulator: behavior
+  instruction: Put the shoes on the rack.
+  camera_names:
+  - ego
+  - left_wrist
+  - right_wrist
+  env_target: r1pro_b1k_low_level
+  env_kwargs:
+    activity_name: putting_shoes_on_rack
+  privileged: false
+  seed_policy:
+    mode: fixed
+    seeds:
+    - 0
+- task_id: putting_up_Christmas_decorations_inside
+  embodiment: r1pro
+  simulator: behavior
+  instruction: Put up the Christmas decorations inside.
+  camera_names:
+  - ego
+  - left_wrist
+  - right_wrist
+  env_target: r1pro_b1k_low_level
+  env_kwargs:
+    activity_name: putting_up_Christmas_decorations_inside
+  privileged: false
+  seed_policy:
+    mode: fixed
+    seeds:
+    - 0
+- task_id: rearranging_kitchen_furniture
+  embodiment: r1pro
+  simulator: behavior
+  instruction: Rearrange the kitchen furniture.
+  camera_names:
+  - ego
+  - left_wrist
+  - right_wrist
+  env_target: r1pro_b1k_low_level
+  env_kwargs:
+    activity_name: rearranging_kitchen_furniture
+  privileged: false
+  seed_policy:
+    mode: fixed
+    seeds:
+    - 0
+- task_id: set_up_a_coffee_station_in_your_kitchen
+  embodiment: r1pro
+  simulator: behavior
+  instruction: Set up a coffee station in your kitchen.
+  camera_names:
+  - ego
+  - left_wrist
+  - right_wrist
+  env_target: r1pro_b1k_low_level
+  env_kwargs:
+    activity_name: set_up_a_coffee_station_in_your_kitchen
+  privileged: false
+  seed_policy:
+    mode: fixed
+    seeds:
+    - 0
+- task_id: setting_mousetraps
+  embodiment: r1pro
+  simulator: behavior
+  instruction: Set the mousetraps.
+  camera_names:
+  - ego
+  - left_wrist
+  - right_wrist
+  env_target: r1pro_b1k_low_level
+  env_kwargs:
+    activity_name: setting_mousetraps
+  privileged: false
+  seed_policy:
+    mode: fixed
+    seeds:
+    - 0
+- task_id: setting_the_fire
+  embodiment: r1pro
+  simulator: behavior
+  instruction: Set the fire.
+  camera_names:
+  - ego
+  - left_wrist
+  - right_wrist
+  env_target: r1pro_b1k_low_level
+  env_kwargs:
+    activity_name: setting_the_fire
+  privileged: false
+  seed_policy:
+    mode: fixed
+    seeds:
+    - 0
+- task_id: slicing_vegetables
+  embodiment: r1pro
+  simulator: behavior
+  instruction: Slice the vegetables.
+  camera_names:
+  - ego
+  - left_wrist
+  - right_wrist
+  env_target: r1pro_b1k_low_level
+  env_kwargs:
+    activity_name: slicing_vegetables
+  privileged: false
+  seed_policy:
+    mode: fixed
+    seeds:
+    - 0
+- task_id: sorting_household_items
+  embodiment: r1pro
+  simulator: behavior
+  instruction: Sort the household items.
+  camera_names:
+  - ego
+  - left_wrist
+  - right_wrist
+  env_target: r1pro_b1k_low_level
+  env_kwargs:
+    activity_name: sorting_household_items
+  privileged: false
+  seed_policy:
+    mode: fixed
+    seeds:
+    - 0
+- task_id: sorting_vegetables
+  embodiment: r1pro
+  simulator: behavior
+  instruction: Sort the vegetables.
+  camera_names:
+  - ego
+  - left_wrist
+  - right_wrist
+  env_target: r1pro_b1k_low_level
+  env_kwargs:
+    activity_name: sorting_vegetables
+  privileged: false
+  seed_policy:
+    mode: fixed
+    seeds:
+    - 0
+- task_id: spraying_for_bugs
+  embodiment: r1pro
+  simulator: behavior
+  instruction: Spray for bugs.
+  camera_names:
+  - ego
+  - left_wrist
+  - right_wrist
+  env_target: r1pro_b1k_low_level
+  env_kwargs:
+    activity_name: spraying_for_bugs
+  privileged: false
+  seed_policy:
+    mode: fixed
+    seeds:
+    - 0
+- task_id: spraying_fruit_trees
+  embodiment: r1pro
+  simulator: behavior
+  instruction: Spray the fruit trees.
+  camera_names:
+  - ego
+  - left_wrist
+  - right_wrist
+  env_target: r1pro_b1k_low_level
+  env_kwargs:
+    activity_name: spraying_fruit_trees
+  privileged: false
+  seed_policy:
+    mode: fixed
+    seeds:
+    - 0
+- task_id: storing_food
+  embodiment: r1pro
+  simulator: behavior
+  instruction: Store the food.
+  camera_names:
+  - ego
+  - left_wrist
+  - right_wrist
+  env_target: r1pro_b1k_low_level
+  env_kwargs:
+    activity_name: storing_food
+  privileged: false
+  seed_policy:
+    mode: fixed
+    seeds:
+    - 0
+- task_id: tidying_bedroom
+  embodiment: r1pro
+  simulator: behavior
+  instruction: Tidy the bedroom.
+  camera_names:
+  - ego
+  - left_wrist
+  - right_wrist
+  env_target: r1pro_b1k_low_level
+  env_kwargs:
+    activity_name: tidying_bedroom
+  privileged: false
+  seed_policy:
+    mode: fixed
+    seeds:
+    - 0
+- task_id: wash_a_baseball_cap
+  embodiment: r1pro
+  simulator: behavior
+  instruction: Wash a baseball cap.
+  camera_names:
+  - ego
+  - left_wrist
+  - right_wrist
+  env_target: r1pro_b1k_low_level
+  env_kwargs:
+    activity_name: wash_a_baseball_cap
+  privileged: false
+  seed_policy:
+    mode: fixed
+    seeds:
+    - 0
+- task_id: wash_dog_toys
+  embodiment: r1pro
+  simulator: behavior
+  instruction: Wash the dog toys.
+  camera_names:
+  - ego
+  - left_wrist
+  - right_wrist
+  env_target: r1pro_b1k_low_level
+  env_kwargs:
+    activity_name: wash_dog_toys
+  privileged: false
+  seed_policy:
+    mode: fixed
+    seeds:
+    - 0

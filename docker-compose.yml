@@ -1,0 +1,181 @@
+# CapX official-mode evaluation — 3-tier topology (D7) on one node.
+#
+# Two INTERNAL networks (each `internal: true` = no route off the node, so egress is
+# blocked in official mode):
+#
+#   policy_network  submission <-> gateway    (the only surface a submission sees)
+#   sim_network     gateway    <-> env-*      (privileged raw obs; submission NOT on it)
+#
+# The submission attaches to policy_network ONLY, so it can reach the gateway and
+# nothing else — not the sim backends, not the internet. The gateway bridges both
+# networks and imports no simulator; it routes each task to an env-backend by
+# TaskSpec.simulator (CAPX_BACKENDS). All three backends (Robosuite, LIBERO,
+# BEHAVIOR) start by default. env-behavior builds without assets; before running
+# behavior tasks, fetch them once into the `behavior-assets` volume with
+# `docker compose --profile assets run --rm fetch-behavior-assets` (see
+# docker/README.md). To run without BEHAVIOR, drop it from CAPX_BACKENDS and
+# `docker compose up gateway submission env-robosuite env-libero`.
+#
+# Do NOT attach a non-internal network to `submission`, or the egress block is
+# defeated. Model weights are mounted read-only and served offline (HF_HUB_OFFLINE=1).
+
+services:
+  gateway:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.gateway
+    image: capx-gateway:local
+    depends_on:
+      - env-robosuite
+      - env-libero
+      - env-behavior
+    environment:
+      CAPX_TASKPACK: ${CAPX_TASKPACK:-taskpacks/original}
+      CAPX_MODE: ${CAPX_MODE:-official}
+      CAPX_SIMULATORS: ${CAPX_SIMULATORS:-}
+      CAPX_HOST: 0.0.0.0
+      CAPX_PORT: "8000"
+      CAPX_BACKENDS: ${CAPX_BACKENDS:-robosuite=env-robosuite:8100,libero=env-libero:8100,behavior=env-behavior:8100}
+    networks:
+      - policy_network
+      - sim_network
+
+  env-robosuite:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.env-robosuite
+    image: capx-env-robosuite:local
+    environment:
+      CAPX_SIMULATOR: robosuite
+      CAPX_TASKPACK: ${CAPX_TASKPACK:-taskpacks/original}
+      CAPX_BACKEND_HOST: 0.0.0.0
+      CAPX_BACKEND_PORT: "8100"
+      MUJOCO_GL: egl
+      # Headless EGL rendering needs the driver's graphics libs; the nvidia
+      # runtime injects them only when asked (its default is compute,utility).
+      NVIDIA_DRIVER_CAPABILITIES: all
+    networks:
+      - sim_network
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
+  env-libero:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.env-libero
+    image: capx-env-libero:local
+    environment:
+      CAPX_SIMULATOR: libero
+      CAPX_TASKPACK: ${CAPX_TASKPACK:-taskpacks/original}
+      CAPX_BACKEND_HOST: 0.0.0.0
+      CAPX_BACKEND_PORT: "8100"
+      MUJOCO_GL: egl
+      NVIDIA_DRIVER_CAPABILITIES: all
+    networks:
+      - sim_network
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
+  # Upstream BEHAVIOR-1K's own image at a pinned commit: OmniGibson 3.9.2 + Isaac
+  # Sim 5.1.0, the first stack that runs on Blackwell (sm_120). env-behavior builds
+  # on top of it; `scale: 0` keeps `up` from ever starting it.
+  behavior-base:
+    scale: 0
+    build:
+      context: https://github.com/StanfordVL/BEHAVIOR-1K.git#${CAPX_BEHAVIOR_COMMIT:-b1979916ec1549b10a4e65e630bc6504a9af1b00}
+      dockerfile: docker/Dockerfile
+    image: capx-behavior-base:3.9.2
+
+  env-behavior:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.env-behavior
+      additional_contexts:
+        behavior-base: service:behavior-base
+    image: capx-env-behavior:local
+    environment:
+      CAPX_SIMULATOR: behavior
+      CAPX_TASKPACK: ${CAPX_TASKPACK:-taskpacks/original}
+      CAPX_BACKEND_HOST: 0.0.0.0
+      CAPX_BACKEND_PORT: "8100"
+      # Isaac Sim renders through Vulkan, which needs the driver's graphics libs.
+      NVIDIA_DRIVER_CAPABILITIES: all
+      # Assets live in a named volume so image rebuilds don't refetch them:
+      # `docker compose --profile assets run --rm fetch-behavior-assets`.
+      OMNIGIBSON_DATA_PATH: /data
+      # Kit appdata in a named volume: the first launch compiles shaders into it
+      # (env build ~280 s instead of ~120 s), later launches reuse them. Isaac Sim
+      # 5.1 needs nothing from the network here, so a cold cache is only slower.
+      OMNIGIBSON_APPDATA_PATH: /cache/appdata
+    volumes:
+      - behavior-assets:/data
+      - behavior-appdata:/cache
+    shm_size: 16gb
+    networks:
+      - sim_network
+    deploy:
+      resources:
+        reservations:
+          devices:
+            # Isaac Sim can pick the wrong device on multi-GPU hosts; pin one card.
+            - driver: nvidia
+              device_ids: ["${CAPX_BEHAVIOR_GPU:-0}"]
+              capabilities: [gpu]
+
+  # One-shot asset fetcher: `docker compose --profile assets run --rm fetch-behavior-assets`.
+  # Deliberately OFF the internal networks — the download needs internet egress,
+  # which sim_network/policy_network block by design. Running it accepts the
+  # BEHAVIOR dataset license.
+  fetch-behavior-assets:
+    profiles: ["assets"]
+    image: capx-env-behavior:local
+    command: ["bash", "docker/download-behavior-assets.sh", "--accept-dataset-tos"]
+    environment:
+      OMNIGIBSON_DATA_PATH: /data
+    volumes:
+      - behavior-assets:/data
+    network_mode: bridge
+
+  submission:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.submission
+    image: capx-submission:local
+    depends_on:
+      - gateway
+    environment:
+      CAPX_ENV_HOST: gateway
+      CAPX_ENV_PORT: "8000"
+      HF_HUB_OFFLINE: "1"
+      HF_HOME: /weights
+    volumes:
+      - ./weights:/weights:ro
+    networks:
+      - policy_network
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
+networks:
+  policy_network:
+    internal: true
+  sim_network:
+    internal: true
+
+volumes:
+  behavior-assets:
+  behavior-appdata:

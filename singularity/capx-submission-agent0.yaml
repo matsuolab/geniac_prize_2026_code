@@ -1,0 +1,23 @@
+# submission.yaml for the CaP-Agent0 reference image, for `capx evalq submit
+# --manifest ... --image singularity/images/capx-submission-agent0.sif`. A team's own
+# submission.yaml has the same shape plus an `image` entry (PRELIM_RULEBOOK.md §6.2).
+team_id: agent0-reference
+submission_id: agent0
+weights:
+  - repo: Qwen/Qwen3.6-27B
+    revision: 6a9e13bd6fc8f0983b9b99948120bc37f49c13e9
+    path: /models/qwen3.6-27b
+  - repo: facebook/sam3
+    revision: 3c879f39826c281e95690f02c7821c4de09afae7
+    path: /models/sam3
+    gated: true
+  # The two-arm lift task's API (env_configs/gateway/franka_two_arm_lift.yaml).
+  - repo: google/owlv2-large-patch14-ensemble
+    revision: 95e26936e865f87db1742128404b3c035d47d89d
+    path: /models/owlv2-large-patch14-ensemble
+  - repo: facebook/sam2.1-hiera-large
+    revision: 665f8e2ad61cf5f53d65644ff27c8ee525124610
+    path: /models/sam2.1-hiera-large
+env:
+  CAPX_MODEL_PATH: /models/qwen3.6-27b
+  CAPX_SAM3_CHECKPOINT: /models/sam3/sam3.pt
