@@ -1,0 +1,137 @@
+# CapX LIBERO env-backend image (3-tier, D7).
+#
+# Singularity port of docker/Dockerfile.env-libero. LIBERO and Robosuite ship
+# incompatible vendored stacks (see capx/envs/simulators/__init__.py), so this is a
+# separate image/venv from capx-env-robosuite.def.
+#
+# Build (on a compute node):
+#   sbatch -p part-$(id -gn) singularity/build.sbatch env-libero
+
+Bootstrap: docker
+From: nvidia/cuda:12.4.1-runtime-ubuntu22.04
+
+%files
+    pyproject.toml /workspace/capx/pyproject.toml
+    README.md /workspace/capx/README.md
+    capx /workspace/capx/
+    docker /workspace/capx/
+    env_configs /workspace/capx/
+    taskpacks /workspace/capx/
+
+%post
+    set -eu
+    export DEBIAN_FRONTEND=noninteractive
+    cd /workspace/capx/capx/third_party
+    find . -mindepth 1 -maxdepth 1 \
+        ! -name LIBERO-PRO ! -name libero_dependencies ! -name pyroki_snippets \
+        -exec rm -rf {} +
+
+    apt-get update && apt-get install -y --no-install-recommends \
+        software-properties-common ca-certificates
+    add-apt-repository ppa:deadsnakes/ppa
+    apt-get update && apt-get install -y --no-install-recommends \
+        python3.11 python3.11-dev python3.11-venv python3-pip \
+        git build-essential cmake \
+        libgl1 libglx0 libegl1 libopengl0 libosmesa6 libglu1-mesa \
+        libx11-6 libxext6 libxrender1
+    rm -rf /var/lib/apt/lists/*
+
+    update-alternatives --install /usr/bin/python python /usr/bin/python3.11 1
+    ln -sf /usr/bin/python3.11 /usr/local/bin/python
+    python -m ensurepip --upgrade
+    python -m pip install --no-cache-dir --upgrade pip
+
+    cd /workspace/capx
+    # Mirrors docker/Dockerfile.env-libero: LIBERO vendors its own robosuite fork,
+    # installed --no-deps so pip does not pull the robosuite backend's pins. The
+    # jax/pyroki block is what capx.integrations needs at import time; jaxls/pyroki
+    # go in --no-deps because they pin each other to different git refs than
+    # uv.lock resolves. open3d is --ignore-installed because its dep tree collides
+    # with a distutils-installed system package.
+    python -m pip install --no-cache-dir \
+        "mujoco==3.5.0" \
+        "numpy==1.26.4" \
+        "scipy" \
+        "pydantic>=2.7" \
+        "pyyaml" \
+        "pillow>=10" \
+        "msgpack" \
+        "gymnasium>=0.29" \
+        "opencv-python-headless" \
+        "viser>=0.2.0" \
+        "easydict==1.9" \
+        "robomimic==0.2.0" \
+        "einops==0.4.1" \
+        "thop==0.1.1-2209072238" \
+        "bddl==1.0.1" \
+        "future==0.18.2" \
+        "cloudpickle==2.1.0" \
+        "gym==0.25.2" \
+        "scikit-learn" \
+        "matplotlib" \
+        "h5py" \
+        "robot_descriptions" \
+        "yourdfpy" \
+        "numba==0.61.2" \
+        "jax==0.4.29" \
+        "jaxlib==0.4.29" \
+        "jax-dataclasses==1.6.3" \
+        "jaxlie==1.5.0" \
+        "jaxtyping" \
+        "loguru" \
+        "rich"
+    # numpy is respecified or --ignore-installed would bump it past the pin
+    python -m pip install --no-cache-dir --ignore-installed "open3d==0.19.0" "numpy==1.26.4"
+    python -m pip install --no-cache-dir --no-deps \
+        "jaxls@git+https://github.com/brentyi/jaxls.git@6fe7cf9d56223736b2c0272d080ec7346203c648" \
+        "pyroki@git+https://github.com/chungmin99/pyroki.git@95afccc22658c461ab1042a048ae4e9c24bc2a47"
+    python -m pip install --no-cache-dir --no-deps -e capx/third_party/libero_dependencies/robosuite
+    python -m pip install --no-cache-dir --no-deps -e capx/third_party/LIBERO-PRO
+    python -m pip install --no-cache-dir --no-deps -e .
+
+    # LIBERO's vendored robosuite fork writes a private macros file on first
+    # import; generate it now so a read-only container start does not try to.
+    python capx/third_party/libero_dependencies/robosuite/robosuite/scripts/setup_macros.py || true
+
+    # LIBERO prompts interactively for asset paths on first import if this config
+    # is missing (EOFError headless). Unlike the Docker image we do NOT write it to
+    # /root/.libero: Singularity runs the container as the invoking user, so ~ is
+    # not /root. LIBERO_CONFIG_PATH pins it regardless of HOME.
+    mkdir -p /opt/libero-config
+    LIB=/workspace/capx/capx/third_party/LIBERO-PRO/libero/libero
+    printf '%s\n' \
+        "assets: ${LIB}/assets" \
+        "bddl_files: ${LIB}/bddl_files" \
+        "benchmark_root: ${LIB}" \
+        "datasets: ${LIB}/../datasets" \
+        "init_states: ${LIB}/init_files" \
+        > /opt/libero-config/config.yaml
+
+    # MuJoCo renders headlessly through EGL. `--nv` binds libEGL_nvidia, but the
+    # glvnd loader also needs the vendor ICD that Docker's nvidia runtime injects
+    # and Singularity does not; without it EGL fails with "does not support the
+    # PLATFORM_DEVICE extension" and every episode comes back as env_crash.
+    mkdir -p /usr/share/glvnd/egl_vendor.d
+    printf '%s\n' '{"file_format_version":"1.0.0","ICD":{"library_path":"libEGL_nvidia.so.0"}}' \
+        > /usr/share/glvnd/egl_vendor.d/10_nvidia.json
+
+    # The repo tree is group-only (0770) on the build host and everything lands
+    # owned by root under --fakeroot, so a container started by an ordinary user
+    # could not even traverse it. Make the installed tree world-readable.
+    chmod -R a+rX /workspace/capx
+
+%environment
+    export PYTHONUNBUFFERED=1
+    export PYTHONPATH=/workspace/capx
+    export MUJOCO_GL=egl
+    export LIBERO_CONFIG_PATH=/opt/libero-config
+    export CAPX_SIMULATOR=libero
+    export CAPX_BACKEND_HOST=127.0.0.1
+    export CAPX_BACKEND_PORT=8100
+
+%runscript
+    cd /workspace/capx
+    exec python docker/serve_env_backend.py "$@"
+
+%labels
+    capx.role env-libero

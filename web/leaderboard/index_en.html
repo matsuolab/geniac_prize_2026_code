@@ -1,0 +1,355 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CapX Leaderboard</title>
+<style>
+  /* Without this, a browser that finds the page wider than the screen "boosts" its text. */
+  html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+  :root { color-scheme: light;
+    --bg: #f7f8fa; --panel: #fff; --text: #1a1c22; --mut: #6b7280; --border: #e5e7eb;
+    --hover: #f2f4f8; --group: #f7f8fa; --track: #edf0f5; --fill: #4f46e5;
+    --shadow: 0 1px 3px rgba(0,0,0,.06), 0 1px 2px rgba(0,0,0,.04);
+    --run: #1d4ed8; --wait: #a16207; --defer: #7c3aed; --cancel: #4b5563;
+    --reject: #b91c1c; --fail: #9f1239; --over: #c2410c; --done: #15803d;
+    --live: #15803d; --stale: #a16207; --notice: #fdf3dc; --notice-text: #a16207; --info: #eef1f8; --info-text: #3f4a5e; }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { color-scheme: dark;
+    --bg: #0e1016; --panel: #161922; --text: #e7e9ee; --mut: #9aa1ad; --border: #262b36;
+    --hover: #1c2029; --group: #12151c; --track: #242a36; --fill: #7c73ff; --shadow: 0 1px 3px rgba(0,0,0,.4);
+    --run: #93c5fd; --wait: #fcd34d; --defer: #c4b5fd; --cancel: #c2c8d2;
+    --reject: #fca5a5; --fail: #fda4af; --over: #fdba74; --done: #86efac;
+    --live: #86efac; --stale: #fcd34d; --notice: #3a2e10; --notice-text: #fcd34d; --info: #1b2130; --info-text: #c2c8d2; } }
+  :root[data-theme="dark"] { color-scheme: dark;
+    --bg: #0e1016; --panel: #161922; --text: #e7e9ee; --mut: #9aa1ad; --border: #262b36;
+    --hover: #1c2029; --group: #12151c; --track: #242a36; --fill: #7c73ff; --shadow: 0 1px 3px rgba(0,0,0,.4);
+    --run: #93c5fd; --wait: #fcd34d; --defer: #c4b5fd; --cancel: #c2c8d2;
+    --reject: #fca5a5; --fail: #fda4af; --over: #fdba74; --done: #86efac;
+    --live: #86efac; --stale: #fcd34d; --notice: #3a2e10; --notice-text: #fcd34d; --info: #1b2130; --info-text: #c2c8d2; }
+
+  * { box-sizing: border-box; }
+  body { font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    max-width: 64rem; margin: 0 auto; padding: 2rem 16px 4rem; background: var(--bg); color: var(--text);
+    -webkit-font-smoothing: antialiased; }
+  /* Title and description on the left, controls pinned top right however long the description is. */
+  header { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 1rem; }
+  h1 { font-size: 1.7rem; margin: 0; letter-spacing: -.01em; }
+  h2 { font-size: 1.05rem; margin: 2rem 0 .6rem; }
+  .sub { color: var(--mut); font-size: .9rem; margin: .35rem 0 0; }
+  .controls { display: flex; align-items: center; gap: .75rem; font-size: .8rem; white-space: nowrap; }
+  .lang { color: var(--mut); text-decoration: none; } .lang:hover { color: var(--fill); }
+  .live { display: inline-flex; align-items: center; gap: .4rem; color: var(--mut); }
+  .live::before { content: ""; width: .5rem; height: .5rem; border-radius: 50%; background: var(--mut); }
+  .live.on::before { background: var(--live); } .live.stale::before { background: var(--stale); }
+  button, select { font: inherit; font-size: .82rem; color: var(--text); background: var(--panel); cursor: pointer;
+    border: 1px solid var(--border); border-radius: .5rem; padding: .3rem .7rem; }
+  button:hover, select:hover { border-color: var(--fill); }
+  /* When the board was made; turns into the warning once the cluster stops reporting. */
+  #updated { margin: 1rem 0 0; padding: .7rem .9rem; border-radius: .6rem; font-size: .85rem;
+    background: var(--info); color: var(--info-text); }
+  #updated:empty { display: none; }
+  #updated.stale { background: var(--notice); color: var(--notice-text); }
+  .section-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 1rem; flex-wrap: wrap; }
+  .section-head select { margin-bottom: .6rem; }
+  .note { color: var(--mut); font-size: .82rem; margin: -.3rem 0 .6rem; }
+
+  .card { background: var(--panel); border: 1px solid var(--border); border-radius: .75rem;
+    box-shadow: var(--shadow); overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: .9rem; }
+  th { text-align: left; font-size: .72rem; font-weight: 600; text-transform: uppercase; letter-spacing: .04em;
+    color: var(--mut); padding: .75rem .9rem; border-bottom: 1px solid var(--border); white-space: nowrap; }
+  td { padding: .7rem .9rem; border-bottom: 1px solid var(--border); white-space: nowrap; vertical-align: middle; }
+  tr:last-child td { border-bottom: none; }
+  tbody tr:hover td { background: var(--hover); }
+  .num { text-align: right; font-variant-numeric: tabular-nums; }
+  .elapsed { font-weight: 600; }
+  .mut { color: var(--mut); }
+  .team-name { font-weight: 600; }
+  .empty { color: var(--mut); padding: 1.2rem .9rem; }
+
+  .rank { width: 3rem; color: var(--mut); font-variant-numeric: tabular-nums; }
+  .medal { display: inline-grid; place-items: center; width: 1.5rem; height: 1.5rem; border-radius: 50%;
+    font-weight: 700; font-size: .8rem; color: #1a1c22; }
+  .r1 { background: #f5c542; } .r2 { background: #c9ced6; } .r3 { background: #d9a066; }
+  .score { display: flex; align-items: center; justify-content: flex-end; gap: .6rem; font-weight: 700; }
+  .bar { width: 70px; height: 7px; border-radius: 999px; background: var(--track); overflow: hidden; }
+  .bar > span { display: block; height: 100%; border-radius: 999px; background: var(--fill); }
+
+  /* One <tbody> per team, opened by a shaded row with the team's name. */
+  tr.team-head td { background: var(--group); font-weight: 700; padding-top: .6rem; padding-bottom: .6rem; }
+  tr.team-head .count { color: var(--mut); font-weight: 400; font-size: .8rem; margin-left: .5rem; }
+  tbody tr.team-head:hover td { background: var(--group); }
+  td.more { padding-top: .45rem; padding-bottom: .45rem; }
+
+  .pill { display: inline-block; padding: .15rem .6rem; border-radius: 999px; font-size: .72rem; font-weight: 600;
+    white-space: nowrap; color: var(--c); background: color-mix(in srgb, var(--c) 14%, transparent); }
+  .running { --c: var(--run); } .waiting { --c: var(--wait); } .deferred { --c: var(--defer); }
+  .cancelled { --c: var(--cancel); } .rejected { --c: var(--reject); } .failed { --c: var(--fail); }
+  .over-time { --c: var(--over); } .done { --c: var(--done); }
+  .pill.best { color: #fff; background: var(--fill); }
+  td .pill.best { margin-left: .5rem; }
+  td .code { margin-left: .5rem; font-size: .72rem; }
+
+  dl.legend { display: grid; grid-template-columns: max-content 1fr; gap: .55rem 1rem; margin: 0;
+    padding: 1rem 1.1rem; font-size: .88rem; }
+  dl.legend dt, dl.legend dd { margin: 0; }
+  dl.legend dd { color: var(--mut); }
+</style>
+<header>
+  <h1>CapX Leaderboard</h1>
+  <div class="controls">
+    <a class="lang" id="lang" href="./" hreflang="ja" lang="ja">日本語</a>
+    <span class="live" id="live">connecting</span>
+    <button type="button" id="theme" aria-label="Toggle colour theme">◐ Theme</button>
+  </div>
+</header>
+<p class="sub" id="meta">Loading…</p>
+<div id="updated"></div>
+
+<h2>Ranking</h2>
+<p class="note">Time Taken runs from the submission's first connection to the gateway until it calls finish() (or, if it never does, until its process exits), so model loading is not included.</p>
+<div class="card"><table id="board"></table></div>
+
+<h2>Evaluation Queue</h2>
+<p class="note">Wall Time is the elapsed time since the evaluation started (or since it was queued, while waiting), including container start-up and model loading.</p>
+<div class="card"><table id="queue"></table></div>
+
+<div class="section-head">
+  <h2>Submission History</h2>
+  <select id="filter" aria-label="Show one team"><option value="">All teams</option></select>
+</div>
+<p class="note" id="statusNote">Each team's latest submissions, newest first.</p>
+<div class="card"><table id="history"></table></div>
+
+<p class="note">Each team's row also shows how its ranking submission (submission_ranking.yaml) fared at intake. It is not run before the deadline: the one on main at the deadline is marked "fixed at the deadline" and is evaluated once afterwards.</p>
+
+<h2>Status Annotations</h2>
+<div class="card">
+<dl class="legend">
+  <dt><span class="pill done">done</span></dt><dd>finished all benchmarks</dd>
+  <dt><span class="pill running">running</span></dt><dd>being evaluated now</dd>
+  <dt><span class="pill waiting">waiting</span></dt><dd>queued; the number is its place in line</dd>
+  <dt><span class="pill deferred">deferred</span></dt><dd>a newer push on hold until the team's running submission finishes</dd>
+  <dt><span class="pill cancelled">cancelled</span></dt><dd>replaced by a newer push before it started, or cut off at the deadline (no result)</dd>
+  <dt><span class="pill over-time">over-time</span></dt><dd>a benchmark ran out of time; scored on what finished, 0 for tasks never reached</dd>
+  <dt><span class="pill rejected">rejected</span></dt><dd>refused before running (invalid submission.yaml, missing or oversized image, bad weights)</dd>
+  <dt><span class="pill failed">failed</span></dt><dd>the evaluation could not finish. If the submission's process exited early, or was stopped for writing more than allowed, it is scored and ranked on what was recorded until then</dd>
+  <dt><span class="pill best" id="bestTag">best</span></dt><dd>the submission the team is ranked by</dd>
+</dl>
+</div>
+
+<h2>Error Codes</h2>
+<p class="note">Why a submission was rejected or failed, shown beside its status.</p>
+<div class="card">
+<dl class="legend" id="codes"></dl>
+</div>
+
+<script>
+// Reads ./leaderboard.json, or ?src=<url>, and reads it again every REFRESH_MS. Cells are
+// filled with textContent only, so a team-chosen submission id cannot inject markup.
+const src = new URLSearchParams(location.search).get("src") || "./leaderboard.json";
+const REFRESH_MS = 15000;
+const el = (tag, text, cls) => { const e = document.createElement(tag); e.textContent = text ?? ""; if (cls) e.className = cls; return e; };
+const td = (content, cls) => { const c = el("td", content instanceof Node ? "" : content, cls);
+  if (content instanceof Node) c.append(content); return c; };
+const tr = (cells, cls) => { const r = document.createElement("tr"); if (cls) r.className = cls; r.append(...cells); return r; };
+const head = (labels) => { const h = document.createElement("thead");
+  h.append(tr(labels.map(([text, cls]) => el("th", text, cls)))); return h; };
+// "Oct 22, 16:30" for every reader: 24-hour clock (h23, so midnight is 00:05, not 24:05).
+const when = iso => iso ? new Date(iso).toLocaleString("en-US",
+  { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }) : "";
+const dur = sec => { if (sec == null) return ""; const m = Math.round(sec / 60);
+  return m < 60 ? `${m} min` : `${Math.floor(m / 60)} h ${String(m % 60).padStart(2, "0")} min`; };
+
+let data = null, lastOk = false;
+const opened = new Set();  // teams whose whole history is unfolded; kept across refreshes
+
+function rankCell(rank) {
+  if (rank == null) return td("", "rank");
+  return td(rank <= 3 ? el("span", String(rank), `medal r${rank}`) : String(rank), "rank");
+}
+
+function scoreCell(score) {
+  if (score == null) return td("–", "num mut");
+  const wrap = el("div", "", "score");
+  const bar = el("span", "", "bar"), fill = el("span");
+  fill.style.width = `${(score * 100).toFixed(1)}%`;
+  bar.append(fill);
+  wrap.append(el("span", (score * 100).toFixed(1) + "%"), bar);
+  return td(wrap, "num");
+}
+
+function renderBoard(d) {
+  const board = document.getElementById("board");
+  const body = document.createElement("tbody");
+  d.leaderboard.forEach(e => {
+    const note = e.score == null && e.subsets_expected ? ` (${e.subsets_completed}/${e.subsets_expected} benchmarks)` : "";
+    body.append(tr([rankCell(e.rank), td(e.team_id, "team-name"), td((e.submission_id ?? "") + note, "mut"),
+      td(dur(e.time_taken_s), "num mut"), scoreCell(e.score)]));
+  });
+  if (!d.leaderboard.length) { const c = td("No teams yet.", "empty"); c.colSpan = 5; body.append(tr([c])); }
+  board.replaceChildren(head([["#", ""], ["Team", ""], ["Submission", ""], ["Time Taken", "num"], ["Score", "num"]]), body);
+}
+
+const ERROR_CODES = {
+  invalid_manifest: "submission.yaml is missing or invalid",
+  image_not_found: "the image is not in the repo at the given revision",
+  image_too_large: "the image is over the size limit",
+  image_hash_mismatch: "the image does not match its sha256",
+  foreign_repo: "the image or weights are not in the team's own org",
+  repo_unreadable: "a repo could not be read (check its access)",
+  weights_gated: "gated weights the organizers have no access to",
+  weights_too_large: "the weights are over the size limit",
+  submission_failed: "the submission exited with an error",
+  submission_timeout: "a benchmark ran out of time",
+  submission_startup_timeout: "the submission did not reach the benchmark in time after starting",
+  submission_storage_exceeded: "the submission wrote more than the storage limit",
+  no_score: "the evaluation produced no score",
+  internal_error: "a problem on the organizers' side; it will be looked at",
+};
+// The code is an enum value from the queue; an unknown one is shown as it is.
+const codeTag = code => { const t = el("span", code, "code mut"); t.title = ERROR_CODES[code] ?? ""; return t; };
+document.getElementById("codes").append(...Object.entries(ERROR_CODES).flatMap(([c, m]) => [el("dt", c, "code"), el("dd", m)]));
+
+const RANKING_LABEL = { accepted: "accepted", rejected: "rejected", missing: "none" };
+function rankingText(r) {
+  if (!r) return "ranking submission: not yet";
+  const detail = r.status === "accepted" ? r.submission_id : r.status === "rejected" ? r.error_code : null;
+  return `ranking submission: ${RANKING_LABEL[r.status] ?? r.status}${detail ? ` (${detail})` : ""}${r.final ? " · fixed at the deadline" : ""}`;
+}
+
+function renderHistory(d) {
+  const shown = d.queue.shown ?? 3;
+  const tag = "best";
+  const filter = document.getElementById("filter");
+  const picked = filter.value;
+  filter.replaceChildren(el("option", "All teams"), ...d.queue.teams.map(t => el("option", t.team_id)));
+  filter.firstChild.value = "";
+  filter.value = d.queue.teams.some(t => t.team_id === picked) ? picked : "";
+
+  const history = document.getElementById("history");
+  history.replaceChildren(head([["Status", ""], ["Submission", ""], ["Submitted", "num"], ["Finished", "num"],
+    ["Wall Time", "num"], ["Score", "num"]]));
+  d.queue.teams.filter(t => !filter.value || t.team_id === filter.value).forEach(t => {
+    const group = document.createElement("tbody");
+    const n = t.activity.length;
+    const name = td(t.team_id); name.colSpan = 6;
+    name.append(el("span", n ? `${n} submission${n === 1 ? "" : "s"}` : "no submissions yet", "count"));
+    name.append(el("span", rankingText(t.ranking), "count"));
+    group.append(tr([name], "team-head"));
+    const all = opened.has(t.team_id) || filter.value === t.team_id;
+    (all ? t.activity : t.activity.slice(0, shown)).forEach(a => {
+      const status = td(el("span", a.status + (a.position ? ` #${a.position}` : ""), "pill " + a.status));
+      if (a.error_code) status.append(codeTag(a.error_code));
+      const sub = td(a.submission_id ?? "");
+      if (a.ranked) sub.append(el("span", tag, "pill best"));
+      group.append(tr([status, sub, td(when(a.submitted_at), "num mut"), td(when(a.finished_at), "num mut"),
+        td(dur(a.wall_s), "num mut"), td(a.score == null ? "" : (a.score * 100).toFixed(1) + "%", "num")]));
+    });
+    if (n > shown && filter.value !== t.team_id) {
+      const button = el("button", all ? "Show less" : "Show more");
+      button.type = "button";
+      button.onclick = () => { opened.has(t.team_id) ? opened.delete(t.team_id) : opened.add(t.team_id); renderHistory(data); };
+      const more = td(button, "more"); more.colSpan = 6;
+      group.append(tr([more]));
+    }
+    history.append(group);
+  });
+  document.getElementById("statusNote").textContent =
+    `Each team's ${shown} latest submissions, newest first. The ${tag} tag marks the one the team is ranked by.`;
+  document.getElementById("bestTag").textContent = tag;
+}
+
+// Elapsed times count on the server's clock (the Date header of each fetch), so a viewer
+// whose own clock is off still sees the right duration. Not generated_at: the publisher
+// pushes only on change, so during a long run that is the time the run started, and a
+// reload would count from there. Without the header (a cross-origin ?src=) the viewer's
+// clock is used.
+let clockOffset = 0;
+const boardNow = () => Date.now() + clockOffset;
+const clock = ms => { const s = Math.max(0, Math.floor(ms / 1000)), p = n => String(n).padStart(2, "0");
+  return s >= 3600 ? `${Math.floor(s / 3600)}:${p(Math.floor(s % 3600 / 60))}:${p(s % 60)}` : `${Math.floor(s / 60)}:${p(s % 60)}`; };
+const QUEUE_ORDER = { running: 0, waiting: 1, deferred: 2 };
+
+function renderQueue(d) {
+  const rows = d.queue.teams.flatMap(t => t.activity.filter(a => a.status in QUEUE_ORDER).map(a => ({ team: t.team_id, ...a })))
+    .sort((a, b) => QUEUE_ORDER[a.status] - QUEUE_ORDER[b.status] || (a.position ?? 0) - (b.position ?? 0)
+      || (a.submitted_at ?? "").localeCompare(b.submitted_at ?? ""));
+  const body = document.createElement("tbody");
+  rows.forEach(a => {
+    const time = td("", "num elapsed" + (a.status === "running" ? "" : " mut"));
+    time.dataset.since = a.started_at || a.submitted_at || "";
+    body.append(tr([td(a.team, "team-name"), td(a.submission_id ?? "", "mut"),
+      td(el("span", a.status + (a.position ? ` #${a.position}` : ""), "pill " + a.status)), td(when(a.submitted_at), "num mut"), time]));
+  });
+  if (!rows.length) { const c = td("The queue is empty.", "empty"); c.colSpan = 5; body.append(tr([c])); }
+  document.getElementById("queue").replaceChildren(
+    head([["Team", ""], ["Submission", ""], ["Status", ""], ["Queued at", "num"], ["Wall Time", "num"]]), body);
+  tick();
+}
+
+function tick() {
+  if (!data) return;
+  for (const cell of document.querySelectorAll("#queue [data-since]")) {
+    cell.textContent = cell.dataset.since ? clock(boardNow() - Date.parse(cell.dataset.since)) : "";
+  }
+}
+
+// The publisher pushes at least every heartbeat_s even when nothing changed, so a much
+// older generated_at means it stopped, not that the queue is quiet.
+function renderLiveness() {
+  const live = document.getElementById("live"), updated = document.getElementById("updated");
+  if (!data) { live.className = "live"; live.textContent = lastOk ? "connecting" : "offline"; return; }
+  const staleMs = ((data.heartbeat_s ?? 1800) * 1.5 + 300) * 1000;
+  const stale = boardNow() - Date.parse(data.generated_at) > staleMs;
+  live.className = "live " + (stale || !lastOk ? "stale" : "on");
+  live.textContent = !lastOk ? "reconnecting" : stale ? "stale" : "live";
+  const at = when(data.generated_at);
+  updated.className = stale ? "stale" : "";
+  updated.textContent = stale
+    ? `The evaluation cluster has not reported since ${at}. The tables below may be out of date.`
+    : `Last updated: ${at}`;
+}
+
+function show(d) {
+  data = d;
+  document.getElementById("meta").textContent =
+    `Each team is ranked by its best submission: score (a weighted average of each environment's success rate in ${d.scoring.subsets.join(", ")})` +
+    (d.scoring.time_limit_s ? ` · evaluation time limit ${dur(d.scoring.time_limit_s)}` : "") +
+    " · equal scores go to the shorter Time Taken, and teams equal on both share a rank.";
+  renderBoard(d);
+  renderQueue(d);
+  renderHistory(d);
+}
+
+async function refresh() {
+  try {
+    const r = await fetch(src, { cache: "no-store" });
+    if (!r.ok) throw new Error(r.status);
+    const served = Date.parse(r.headers.get("date") ?? "");
+    if (!Number.isNaN(served)) clockOffset = served - Date.now();
+    const d = await r.json();
+    lastOk = true;
+    if (!data || d.generated_at !== data.generated_at) show(d);
+  } catch (e) {
+    lastOk = false;
+    if (!data) document.getElementById("meta").textContent = "Could not load " + src + " (" + e.message + ")";
+  }
+  renderLiveness();
+}
+
+// Keep ?src= when switching language.
+document.getElementById("lang").search = location.search;
+document.getElementById("filter").addEventListener("change", () => data && renderHistory(data));
+document.getElementById("theme").addEventListener("click", () => {
+  const root = document.documentElement;
+  const dark = root.dataset.theme ? root.dataset.theme === "dark" : matchMedia("(prefers-color-scheme: dark)").matches;
+  root.dataset.theme = dark ? "light" : "dark";
+  try { localStorage.setItem("theme", root.dataset.theme); } catch {}
+});
+try { const saved = localStorage.getItem("theme"); if (saved) document.documentElement.dataset.theme = saved; } catch {}
+
+refresh();
+setInterval(refresh, REFRESH_MS);
+setInterval(tick, 1000);
+// A hidden tab is throttled; catch up as soon as it is looked at again.
+document.addEventListener("visibilitychange", () => { if (!document.hidden) refresh(); });
+</script>

@@ -1,0 +1,19 @@
+# CapX evaluation settings (capx.config.EvalConfig). Organizers override by
+# passing a file to `load_eval_config`.
+
+submission:
+  max_image_gb: 80.0         # submission image size ceiling
+
+embodiments:
+  franka:
+    # Published Franka Panda joint limits (rad), q1..q7.
+    joint_lower: [-2.8973, -1.7628, -2.8973, -3.0718, -2.8973, -0.0175, -2.8973]
+    joint_upper: [2.8973, 1.7628, 2.8973, -0.0698, 2.8973, 3.7525, 2.8973]
+    gripper_min: 0.0
+    gripper_max: 1.0
+  r1pro:
+    # OmniGibson control vector for R1Pro's `r1pro_primitives*.yaml` controller stack
+    # (capx/third_party/b1k, StarterSemanticActionPrimitives): base(3) + torso(4) +
+    # left_arm(7) + left_gripper(2) + right_arm(7) + right_gripper(2) = 25
+    # (one JointController per component, all use_delta_commands=false).
+    action_dim: 25

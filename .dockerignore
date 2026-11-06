@@ -1,0 +1,30 @@
+# An allowlist: the images install only these trees, and Dockerfile.submission's
+# image is handed to teams. Everything else in the checkout stays out -- organizer-only
+# packs (private/, mounted at run time), weights, outputs and repo history.
+*
+!pyproject.toml
+!README.md
+!capx
+!docker
+!env_configs
+!taskpacks
+
+# Inside those trees: build and run leftovers (docker/setup-behavior.sh puts a venv
+# and ~55 GB of assets under b1k) and the key files docker/run.sh and the LLM
+# proxies read.
+**/.git
+**/.venv*
+**/__pycache__
+**/*.pyc
+**/.pytest_cache
+**/.ruff_cache
+**/.mypy_cache
+**/outputs
+capx/third_party/b1k/datasets
+**/api_keys.yaml
+**/hf_token
+**/.env
+**/.openaikey
+**/.openrouterkey
+**/.nvinferencekeys
+**/.webui_secret_key

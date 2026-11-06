@@ -1,0 +1,39 @@
+# Usage: python -m capx.submission.run --config-path env_configs/gateway/runner.yaml
+gateway_host: gateway
+gateway_port: 8000
+
+model: Qwen/Qwen3.6-27B
+server_url: http://127.0.0.1:8110/v1/chat/completions
+temperature: 0.0
+# R1Pro multiturn prompts need long reasoning: 4096 truncates mid-thinking.
+# The server's --max-model-len (agent0-entrypoint.sh) leaves room for it.
+max_tokens: 8192
+# trials_per_task is unset: run every trial the manifest gives each task.
+# Throughput peaks at 16 lanes on one B300.
+concurrency: 16
+# The gateway's lane cap per simulator (rulebook §4.4). A lane is handed only a trial
+# it can start, and BEHAVIOR's trials go out first, so no lane sits waiting for a
+# backend while there is other work.
+simulator_lanes:
+  behavior: 8
+output_dir: outputs/gateway_submission
+
+# The three things README calls CaP-Agent0: multi-turn visual differencing, the
+# synthesised skill library (the API class in the task configs below), and parallel
+# ensemble inference.
+use_visual_feedback: true
+use_img_differencing: true
+use_video_differencing: false
+use_wrist_camera: false
+# Nine candidates per turn at temperatures 0.1-0.9, then one synthesis call. Ten
+# generations where a greedy call costs one -- size the model server's batch for
+# it (CAPX_MAX_NUM_SEQS) and the subset budget with it.
+use_parallel_ensemble: true
+
+# Tasks not named here resolve by embodiment and cameras
+# (capx.submission.runner.resolve_task_config_path). The two-arm tasks bind
+# different control APIs, so the one the fallback does not pick is named.
+# A relative `config` is resolved against this file's directory.
+task_map:
+  - task_id: two_arm_handover
+    config: franka_two_arm_handover.yaml

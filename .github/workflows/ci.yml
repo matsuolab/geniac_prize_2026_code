@@ -1,0 +1,43 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install ruff==0.16.10
+      - run: >-
+          ruff check
+          capx/evalqueue capx/gateway capx/submission capx/protocol
+          capx/cli capx/config capx/agent_client capx/llm
+
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        hub: ["huggingface_hub>=1.2,<2", "huggingface_hub>=2"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: >-
+          pip install pydantic pyyaml tyro msgpack msgpack-numpy "${{ matrix.hub }}"
+          numpy pillow gymnasium imageio pytest pytest-timeout
+      - run: >-
+          python -m pytest -q tests
+          --ignore=tests/submission --ignore=tests/integrations
+          --ignore=tests/test_console_capture.py
+        env:
+          PYTHONPATH: .

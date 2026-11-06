@@ -1,0 +1,57 @@
+# CapX GATEWAY image — the organizer's referee, simulator-agnostic.
+#
+# Singularity port of docker/Dockerfile.gateway for the Slurm/Singularity clusters
+# where the eval queue runs (no Docker daemon; see docs/operations.md).
+# Runs capx.gateway (referee / ObsFilter / scoring) and exposes only
+# reset / step / get_observation to the submission. It imports NO simulator: with
+# CAPX_BACKENDS set it routes each task to an env-backend process (RemoteEnvFactory).
+#
+# Build (on a compute node, never the login node):
+#   sbatch -p part-$(id -gn) singularity/build.sbatch gateway
+
+Bootstrap: docker
+From: python:3.11-slim
+
+%files
+    pyproject.toml /workspace/capx/pyproject.toml
+    README.md /workspace/capx/README.md
+    capx /workspace/capx/
+    docker /workspace/capx/
+    env_configs /workspace/capx/
+    taskpacks /workspace/capx/
+
+%post
+    set -eu
+    # The gateway hosts no simulator, so none of the vendored sim stacks are
+    # needed — dropping them keeps this image small enough to rebuild cheaply.
+    rm -rf /workspace/capx/capx/third_party
+    cd /workspace/capx
+    python -m pip install --no-cache-dir --upgrade pip
+    python -m pip install --no-cache-dir \
+        "numpy==1.26.4" \
+        "pydantic>=2.7" \
+        "pyyaml" \
+        "pillow>=10" \
+        "msgpack" \
+        "tyro"
+    python -m pip install --no-cache-dir --no-deps -e .
+
+    # The repo tree is group-only (0770) on the build host and everything lands
+    # owned by root under --fakeroot, so a container started by an ordinary user
+    # could not even traverse it. Make the installed tree world-readable.
+    chmod -R a+rX /workspace/capx
+
+%environment
+    export PYTHONUNBUFFERED=1
+    export PYTHONPATH=/workspace/capx
+    export CAPX_MODE=official
+    export CAPX_TASKPACK=taskpacks/original
+    export CAPX_HOST=127.0.0.1
+    export CAPX_PORT=8000
+
+%runscript
+    cd /workspace/capx
+    exec python docker/serve_environment.py "$@"
+
+%labels
+    capx.role gateway
