@@ -320,9 +320,8 @@ python3 -m json.tool ~/capx-queue/root/results/agent0-reference__smoke-1__*.json
 **トークン**: 主催者アカウントで期限の無い fine-grained token を発行し、`CAPX_HF_TOKEN` に入れます。
 未設定だと `hf auth login` の期限付きトークンを使い、切れると受け付けがエラーも出さずに止まります。
 
-**チームの登録**: 運営が、チームの org に private の model リポジトリ `capx-submission` を作り、このリポジトリに
-`teams/prelim/<org>.yaml`（`team_id: <org>`、`repo: <org>/capx-submission`）を足します（ルールブック §6.1）。
-`team_id` は org の名前で固定で、違うファイルは読み込みません。
+**チームの登録**: チームは、このリポジトリに `teams/prelim/<team_id>.yaml` を足す pull request を送ります
+（ルールブック §6.1）。運営は、`repo` の org がそのチームのために用意した org であることを確かめてからマージします。
 チームの身元はリポジトリの org で決まり、他チームの org にあるイメージや重みは却下されます。
 `tests/evalqueue/test_teams.py` は、`teams/prelim/` のファイルがすべて正しいことも確かめます。
 

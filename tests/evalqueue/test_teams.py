@@ -15,12 +15,12 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
 def _file(team_id: str, org: str | None = None) -> str:
-    return f"team_id: {team_id}\nrepo: {org or team_id}/capx-submission\n"
+    return f"team_id: {team_id}\nrepo: {org or team_id + '-org'}/capx-submission\n"
 
 
 def test_a_registration_is_read_from_its_file() -> None:
     teams, problems = parse_registry({"alpha.yaml": _file("alpha")})
-    assert [(t.team_id, t.repo) for t in teams] == [("alpha", "alpha/capx-submission")]
+    assert [(t.team_id, t.repo) for t in teams] == [("alpha", "alpha-org/capx-submission")]
     assert problems == []
 
 
@@ -28,7 +28,6 @@ def test_a_registration_is_read_from_its_file() -> None:
     ("name", "text", "problem"),
     [
         ("beta.yaml", _file("alpha"), "must be named alpha.yaml"),
-        ("alpha.yaml", _file("alpha", "alpha-org"), "team_id must be the repo's org, alpha-org"),
         ("alpha.yaml", "team_id: [", "alpha.yaml"),
         ("alpha.yaml", "team_id: ../etc\nrepo: org/repo\n", "team_id"),
         ("alpha.yaml", "team_id: alpha\nrepo: no-slash\n", "must be a HuggingFace '<owner>/<name>'"),
@@ -43,12 +42,16 @@ def test_a_bad_registration_is_left_out(name: str, text: str, problem: str) -> N
     assert len(problems) == 1 and problem in problems[0]
 
 
-def test_teams_whose_orgs_differ_only_in_case_are_all_left_out() -> None:
+def test_teams_that_name_the_same_org_are_all_left_out() -> None:
     teams, problems = parse_registry(
-        {"alpha.yaml": _file("alpha"), "Alpha.yaml": _file("Alpha"), "gamma.yaml": _file("gamma")}
+        {
+            "alpha.yaml": _file("alpha", "shared-org"),
+            "beta.yaml": _file("beta", "Shared-Org"),
+            "gamma.yaml": _file("gamma"),
+        }
     )
     assert [t.team_id for t in teams] == ["gamma"]
-    assert problems == ["org 'alpha' is named by more than one team: Alpha, alpha"]
+    assert problems == ["org 'shared-org' is named by more than one team: alpha, beta"]
 
 
 def test_the_registrations_in_this_repository_are_valid() -> None:

@@ -1,11 +1,10 @@
 """The registered teams.
 
-The organizers create each team's ``<org>/capx-submission`` and register it by adding
-``teams/prelim/<team_id>.yaml`` to this repository (PRELIM_RULEBOOK.md §6.1). The
-``team_id`` is the team's HuggingFace org::
+A team registers by a pull request that adds ``teams/prelim/<team_id>.yaml`` to this
+repository (PRELIM_RULEBOOK.md §6.1)::
 
     team_id: team-alpha
-    repo: team-alpha/capx-submission
+    repo: team-alpha-org/capx-submission
 
 The watcher reads the registry out of git on every poll, so a merged registration is
 picked up without a restart. It keeps the last list it read in the store, where the
@@ -39,9 +38,9 @@ class RegistryError(RuntimeError):
 def parse_registry(files: dict[str, str]) -> tuple[list[HubTeam], list[str]]:
     """The teams in ``files`` (file name -> contents), and what is wrong with the rest.
 
-    A file that does not parse, is not named after its ``team_id``, or whose ``team_id``
-    is not its repo's org, is left out. So are all the teams whose orgs differ only in
-    case: the Hub treats them as one org, and an org cannot belong to two teams.
+    A file that does not parse, or is not named after its ``team_id``, is left out.
+    So are all the teams that name the same org: the org is what identifies a team,
+    so it cannot belong to two.
     """
     teams: list[HubTeam] = []
     problems: list[str] = []
@@ -56,10 +55,6 @@ def parse_registry(files: dict[str, str]) -> tuple[list[HubTeam], list[str]]:
             continue
         if name != f"{team.team_id}.yaml":
             problems.append(f"{name}: must be named {team.team_id}.yaml")
-            continue
-        org = team.repo.split("/", 1)[0]
-        if team.team_id != org:
-            problems.append(f"{name}: team_id must be the repo's org, {org}")
             continue
         teams.append(team)
     by_org: dict[str, list[str]] = {}
