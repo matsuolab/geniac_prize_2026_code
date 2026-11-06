@@ -85,7 +85,7 @@ class HubConfig(BaseModel):
 
 class TeamsConfig(BaseModel):
     """Where the team registry is: one file per team in a git repository, added by the
-    organizers (capx/evalqueue/teams.py)."""
+    team's pull request (capx/evalqueue/teams.py)."""
 
     model_config = ConfigDict(extra="forbid")
 

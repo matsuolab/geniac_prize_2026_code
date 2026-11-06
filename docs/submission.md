@@ -50,9 +50,8 @@ capx eval --taskpack taskpacks/original --mode dev --simulators robosuite
 
 ## 3. 提出用リポジトリを用意する
 
-運営が、チームの org に提出用の model リポジトリ `capx-submission` を作ります（例: `team-alpha/capx-submission`）。
-チームがリポジトリを作ったり、登録の手続きをしたりする必要はありません。`team_id` はチームの org の名前です
-（ルールブック §6.1）。
+1. チームの org に、提出用の model リポジトリを1つ作ります（例: `team-alpha-org/capx-submission`）。
+2. このリポジトリに `teams/prelim/<team_id>.yaml` を足す pull request を送ります（ルールブック §6.1）。
 
 ## 4. 提出する
 
@@ -63,10 +62,10 @@ capx eval --taskpack taskpacks/original --mode dev --simulators robosuite
 # 1. イメージを push して commit の SHA を得る
 python -c "from huggingface_hub import HfApi; print(HfApi().upload_file(
     path_or_fileobj='agent.sif', path_in_repo='agent.sif',
-    repo_id='team-alpha/capx-images', commit_message='week 3 image').oid)"
+    repo_id='team-alpha-org/capx-images', commit_message='week 3 image').oid)"
 
 # 2. その SHA を submission.yaml の image.revision に書いて push する
-hf upload team-alpha/capx-submission submission.yaml submission.yaml --commit-message "week 3"
+hf upload team-alpha-org/capx-submission submission.yaml submission.yaml --commit-message "week 3"
 ```
 
 評価されるのは、`submission.yaml` の中身が前の提出と違うときだけです（ルールブック §6.4）。

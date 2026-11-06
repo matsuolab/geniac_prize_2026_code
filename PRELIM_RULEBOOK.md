@@ -259,16 +259,24 @@
 
 ## 6. 提出
 
-### 6.1 提出用リポジトリ
+### 6.1 提出用リポジトリを用意して登録する
 
-- 運営が、各チームに用意した HuggingFace の organization（以下、チームの org）に、提出用の private な
-  model リポジトリ `capx-submission` を作ります（例: `team-alpha/capx-submission`）。
-  チームがリポジトリを作ったり、登録の手続きをしたりする必要はありません。
-- 予選が始まると（11/12 12:00）、運営が提出用リポジトリの `main` の監視を始めます。
-- `team_id` は、チームの org の名前で固定です（例: `team-alpha`）。`submission.yaml` と
-  `submission_ranking.yaml` の `team_id` にも、これを書きます。
+1. 運営が各チームに用意した HuggingFace の organization（以下、チームの org）に、提出用の model
+   リポジトリを1つ作ります（例: `team-alpha-org/capx-submission`）。private で構いません。
+2. 予選が始まったら（11/12 12:00 以降）、**チームの誰か1人が、このリポジトリに `teams/prelim/<team_id>.yaml` を
+   足す pull request を送ってください。** 運営が確認してマージすると、提出用リポジトリの `main` の監視が始まります。
+
+   ```yaml
+   # teams/prelim/team-alpha.yaml
+   team_id: team-alpha
+   repo: team-alpha-org/capx-submission
+   ```
+
+   ファイル名は `team_id` に合わせます。書けるのは `team_id` と `repo` だけです。
+
+- `team_id` は 1〜64 文字の英数字と `.`・`_`・`-` で、英数字で始めます。
 - `team_id` と、提出ごとに付ける `submission_id` は、リーダーボードに表示されて他のチームにも見えます。
-  `submission_id` には、手法の名前や内部のコード名など、秘密にしたい情報は入れないでください。
+  手法の名前や内部のコード名など、秘密にしたい情報は入れないでください。
 
 ### 6.2 `submission.yaml` と `submission_ranking.yaml`
 
@@ -280,7 +288,7 @@ schema_version: 1
 team_id: team-alpha
 submission_id: week3
 image:
-  repo: team-alpha/capx-images
+  repo: team-alpha-org/capx-images
   revision: <40桁の commit sha>
   path: agent.sif
 entrypoint: []            # 空ならイメージの runscript を実行
@@ -297,7 +305,7 @@ env:                      # 提出物用の環境変数
 | 項目 | 内容 |
 |---|---|
 | `schema_version` | `1` |
-| `team_id` | チームの org の名前（[§6.1](#61-提出用リポジトリ)） |
+| `team_id` | 登録した `team_id` |
 | `submission_id` | 提出の名前。1〜64 文字の英数字と `.`・`_`・`-` で、英数字で始めます |
 | `image.repo` | イメージを置いたリポジトリ。チームの org の中のどのリポジトリでも構いません |
 | `image.revision` | イメージが入っている commit の SHA（40桁） |
