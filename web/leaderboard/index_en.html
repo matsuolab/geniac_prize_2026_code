@@ -50,6 +50,7 @@
   .section-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 1rem; flex-wrap: wrap; }
   .section-head select { margin-bottom: .6rem; }
   .note { color: var(--mut); font-size: .82rem; margin: -.3rem 0 .6rem; }
+  .card + .note { margin-top: .6rem; }  /* a note after a table, not under a heading */
 
   .card { background: var(--panel); border: 1px solid var(--border); border-radius: .75rem;
     box-shadow: var(--shadow); overflow-x: auto; }
@@ -86,7 +87,8 @@
   .over-time { --c: var(--over); } .done { --c: var(--done); }
   .pill.best { color: #fff; background: var(--fill); }
   td .pill.best { margin-left: .5rem; }
-  td .code { margin-left: .5rem; font-size: .72rem; }
+  .pill.code { --c: var(--mut); font-variant-numeric: tabular-nums; }
+  td .pill.code { margin-left: .5rem; }
 
   dl.legend { display: grid; grid-template-columns: max-content 1fr; gap: .55rem 1rem; margin: 0;
     padding: 1rem 1.1rem; font-size: .88rem; }
@@ -137,9 +139,9 @@
 </div>
 
 <h2>Error Codes</h2>
-<p class="note">Why a submission was rejected or failed, shown beside its status.</p>
+<p class="note">Why a submission was rejected or failed. Its row shows the code beside the status; hover it for the meaning.</p>
 <div class="card">
-<dl class="legend" id="codes"></dl>
+<table id="codes"></table>
 </div>
 
 <script>
@@ -205,14 +207,38 @@ const ERROR_CODES = {
   no_score: "the evaluation produced no score",
   internal_error: "a problem on the organizers' side; it will be looked at",
 };
-// The code is an enum value from the queue; an unknown one is shown as it is.
-const codeTag = code => { const t = el("span", code, "code mut"); t.title = ERROR_CODES[code] ?? ""; return t; };
-document.getElementById("codes").append(...Object.entries(ERROR_CODES).flatMap(([c, m]) => [el("dt", c, "code"), el("dd", m)]));
+// Rows show a code by this index only. Fixed per code, never renumbered: a new code gets the
+// next free number (tests/evalqueue/test_leaderboard_page.py checks every code has one).
+const CODE_INDEX = {
+  invalid_manifest: "E01",
+  image_not_found: "E02",
+  image_too_large: "E03",
+  image_hash_mismatch: "E04",
+  foreign_repo: "E05",
+  repo_unreadable: "E06",
+  weights_gated: "E07",
+  weights_too_large: "E08",
+  submission_failed: "E09",
+  submission_timeout: "E10",
+  submission_startup_timeout: "E11",
+  submission_storage_exceeded: "E12",
+  no_score: "E13",
+  internal_error: "E14",
+};
+const codeLabel = code => CODE_INDEX[code] ?? code;
+const codeTag = code => { const t = el("span", codeLabel(code), "pill code"); t.title = ERROR_CODES[code] ?? ""; return t; };
+// A code the page does not know is shown as it is.
+{
+  const body = document.createElement("tbody");
+  Object.keys(CODE_INDEX).sort((a, b) => CODE_INDEX[a].localeCompare(CODE_INDEX[b])).forEach(c =>
+    body.append(tr([td(codeTag(c)), td(c, "mut"), td(ERROR_CODES[c] ?? "")])));
+  document.getElementById("codes").replaceChildren(head([["Code", ""], ["Error", ""], ["Meaning", ""]]), body);
+}
 
 const RANKING_LABEL = { accepted: "accepted", rejected: "rejected", missing: "none" };
 function rankingText(r) {
   if (!r) return "ranking submission: not yet";
-  const detail = r.status === "accepted" ? r.submission_id : r.status === "rejected" ? r.error_code : null;
+  const detail = r.status === "accepted" ? r.submission_id : r.status === "rejected" ? codeLabel(r.error_code) : null;
   return `ranking submission: ${RANKING_LABEL[r.status] ?? r.status}${detail ? ` (${detail})` : ""}${r.final ? " · fixed at the deadline" : ""}`;
 }
 
