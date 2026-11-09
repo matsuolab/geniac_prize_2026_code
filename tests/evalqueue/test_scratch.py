@@ -7,6 +7,7 @@ import os
 import subprocess
 import sys
 import time
+from pathlib import Path
 
 import pytest
 
@@ -214,6 +215,7 @@ def _fake_process(procfs, name: str, *, uid: int):
     process = procfs / name
     (process / "fd").mkdir(parents=True)
     (process / "status").write_text(f"Name:\tx\nUid:\t{uid}\t{uid}\t{uid}\t{uid}\n")
+    (process / "stat").write_text(f"{name} (x) S 1 {name} {name} 0 -1\n")  # alive
     (process / "fd").chmod(0)
     try:
         yield
@@ -261,11 +263,51 @@ def test_a_process_whose_descriptors_cannot_be_read_is_over_the_limit(tmp_path) 
         disk_use([tmp_path / "out"], NO_LIMIT, NO_LIMIT, procfs=fd)
 
 
+@needs_permissions
+def test_a_zombie_whose_descriptors_cannot_be_read_is_skipped(tmp_path) -> None:
+    """A process that has exited shows its /proc entries as root's: it holds nothing."""
+    procfs = tmp_path / "proc"
+    with _fake_process(procfs, "16", uid=os.getuid()):
+        (procfs / "16" / "stat").write_text("16 (x y) Z 1 16 16 0 -1\n")
+        with _opened(procfs) as fd:
+            disk_use([tmp_path / "out"], NO_LIMIT, NO_LIMIT, procfs=fd)
+
+
+@needs_permissions
+def test_a_live_process_that_stays_unreadable_is_still_over_the_limit(tmp_path, monkeypatch) -> None:
+    monkeypatch.setattr(scratch, "EXIT_GRACE_S", 0.1)
+    procfs = tmp_path / "proc"
+    with _fake_process(procfs, "16", uid=os.getuid()):
+        (procfs / "16" / "stat").write_text("16 (x) S 1 16 16 0 -1\n")
+        with _opened(procfs) as fd, pytest.raises(UnmeasurableError, match="process 16"):
+            disk_use([tmp_path / "out"], NO_LIMIT, NO_LIMIT, procfs=fd)
+
+
+def test_a_real_zombie_does_not_stop_the_measurement(tmp_path) -> None:
+    """The kernel makes an exited, unreaped child's fd directory root's while its status
+    still names this user: the race that stopped real submissions."""
+    out = tmp_path / "out"
+    out.mkdir()
+    child = os.fork()
+    if child == 0:
+        os._exit(0)
+    try:
+        deadline = time.monotonic() + 5
+        while Path(f"/proc/{child}/stat").read_text().rpartition(")")[2].split()[0] != "Z":
+            assert time.monotonic() < deadline
+            time.sleep(0.01)
+        with _procfs(tmp_path, child) as procfs:
+            disk_use([out], NO_LIMIT, NO_LIMIT, procfs=procfs)
+    finally:
+        os.waitpid(child, 0)
+
+
 def _process_with_a_descriptor(procfs, name: str):
     """A process of this user in a stand-in /proc, holding one descriptor."""
     process = procfs / name
     (process / "fd").mkdir(parents=True)
     (process / "status").write_text(f"Name:\tx\nUid:\t{os.getuid()}\n")
+    (process / "stat").write_text(f"{name} (x) S 1 {name} {name} 0 -1\n")  # alive
     (process / "fd" / "3").symlink_to("/capx/out/gone.bin (deleted)")
     return process / "fd"
 
