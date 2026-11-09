@@ -24,6 +24,11 @@ class EpisodeTiming:
     observations: int = 0
     obs_s: float = 0.0
     ended_at: float | None = None
+    steps_to_success: int | None = None
+    """Control cycles into the episode at its first success; None if it never succeeded.
+    The episode itself goes on (success is not told to the submission), so ``steps``
+    alone overstates what a success took."""
+    wall_to_success_s: float | None = None
 
     def wall_s(self, now: float) -> float:
         return (self.ended_at if self.ended_at is not None else now) - self.started_at
@@ -43,6 +48,10 @@ class EpisodeTiming:
             "client_s": round(self.client_s(now), 3),
             "steps": self.steps,
             "observations": self.observations,
+            "steps_to_success": self.steps_to_success,
+            "wall_to_success_s": (
+                None if self.wall_to_success_s is None else round(self.wall_to_success_s, 3)
+            ),
         }
 
 
@@ -77,6 +86,14 @@ class Timings:
             if timing is not None:
                 timing.sim_s += seconds
                 timing.steps += steps
+
+    def succeed(self, episode_id: str, cycles: int) -> None:
+        """Note the episode's first success, ``cycles`` control cycles in."""
+        with self._lock:
+            timing = self._episodes.get(episode_id)
+            if timing is not None and timing.steps_to_success is None:
+                timing.steps_to_success = cycles
+                timing.wall_to_success_s = self._clock() - timing.started_at
 
     def add_obs(self, episode_id: str, seconds: float) -> None:
         with self._lock:

@@ -234,6 +234,7 @@ class GatewaySession:
                     # once: a later cycle may still be running when the job ends.
                     if outcome.success:
                         shared.scoring.record_success(episode_id, active.spec.task_id)
+                        shared.timing.succeed(episode_id, active.cycles)
                     if outcome.terminated or outcome.truncated:
                         break
                 reward = active.env.compute_reward()
