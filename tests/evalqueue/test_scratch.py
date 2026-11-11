@@ -45,10 +45,12 @@ def test_the_roots_own_blocks_count_but_the_roots_are_not_files(tmp_path) -> Non
     for index in range(2000):
         (tmp_path / f"a-rather-long-file-name-{index:05}").touch()
 
+    if _blocks(tmp_path) == 0:
+        pytest.skip("this filesystem (tmpfs, for one) reports no blocks for directories")
+
     use = disk_use([tmp_path], NO_LIMIT, NO_LIMIT)
 
     assert use == scratch.DiskUse(bytes=_blocks(tmp_path), files=2000)
-    assert use.bytes > 0
 
 
 def test_a_sparse_file_counts_what_it_takes_not_its_length(tmp_path) -> None:
