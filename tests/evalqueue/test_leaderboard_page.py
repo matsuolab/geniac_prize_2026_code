@@ -44,3 +44,9 @@ def test_a_row_shows_the_error_code_when_it_failed_and_the_share_otherwise() -> 
             "return a.error_code ? codeTag(a.error_code) : null;"
         )
         assert '"pill code"' in lines[-1]  # the share looks like a code
+
+
+def test_the_status_tag_does_not_shadow_the_best_label() -> None:
+    # A row-level `const tag` once hid the history's "best" label and printed an element.
+    for page in PAGES:
+        assert page.read_text().count("const tag =") == 1, page.name

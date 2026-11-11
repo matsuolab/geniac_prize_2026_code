@@ -277,8 +277,8 @@ function renderHistory(d) {
     const all = opened.has(t.team_id) || filter.value === t.team_id;
     (all ? t.activity : t.activity.slice(0, shown)).forEach(a => {
       const status = td(statusPill(a));
-      const tag = statusTag(a);
-      if (tag) status.append(tag);
+      const side = statusTag(a);
+      if (side) status.append(side);
       const sub = td(a.submission_id ?? "");
       if (a.ranked) sub.append(el("span", tag, "pill best"));
       group.append(tr([status, sub, td(when(a.submitted_at), "num mut"), td(when(a.finished_at), "num mut"),
