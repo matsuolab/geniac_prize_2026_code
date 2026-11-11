@@ -137,7 +137,7 @@
   <dt><span class="pill rejected">rejected</span></dt><dd>refused before running (invalid submission.yaml, missing or oversized image, bad weights)</dd>
   <dt><span class="pill failed">failed</span></dt><dd>the evaluation could not finish. If the submission's process exited early, or was stopped for writing more than allowed, it is scored and ranked on what was recorded until then</dd>
   <dt><span class="pill best" id="bestTag">best</span></dt><dd>the submission the team is ranked by</dd>
-  <dt><span class="progress">37%</span></dt><dd>share of the submission's trials started so far, all benchmarks together, rounded down</dd>
+  <dt><span class="progress">37%</span></dt><dd>share of the pack's trials your submission got through, all benchmarks together, rounded down; shown after the run ends</dd>
 </dl>
 </div>
 
@@ -309,7 +309,7 @@ function renderQueue(d) {
     const time = td("", "num elapsed" + (a.status === "running" ? "" : " mut"));
     time.dataset.since = a.started_at || a.submitted_at || "";
     body.append(tr([td(a.team, "team-name"), td(a.submission_id ?? "", "mut"),
-      withProgress(td(el("span", a.status + (a.position ? ` #${a.position}` : ""), "pill " + a.status)), a), td(when(a.submitted_at), "num mut"), time]));
+      td(el("span", a.status + (a.position ? ` #${a.position}` : ""), "pill " + a.status)), td(when(a.submitted_at), "num mut"), time]));
   });
   if (!rows.length) { const c = td("The queue is empty.", "empty"); c.colSpan = 5; body.append(tr([c])); }
   document.getElementById("queue").replaceChildren(

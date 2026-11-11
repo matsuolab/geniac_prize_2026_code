@@ -27,7 +27,7 @@ from capx.evalqueue.config import QueueConfig, SubsetConfig
 from capx.evalqueue.models import ErrorCode, RunResult, RunStatus, SubsetResult
 from capx.evalqueue.queue import FileQueue
 from capx.evalqueue.ranking import RankingBook, RankingEntry
-from capx.evalqueue.store import EvalStore, trials_started, utcnow, write_json_atomic
+from capx.evalqueue.store import EvalStore, utcnow, write_json_atomic
 from capx.evalqueue.teams import registered_teams
 from capx.protocol.taskpack import load_pack
 
@@ -198,7 +198,8 @@ def _total_trials(config: QueueConfig) -> int:
 
 def _progress(done: int | None, total: int) -> int | None:
     """Trials started as a whole percent of all of them, rounded down so that 100 means every
-    trial started. Only the percent is published: the counts would give the pack's size."""
+    trial started. Only the percent of a finished run is published: the counts would give
+    the pack's size."""
     if done is None or total <= 0:
         return None
     return min(100, done * 100 // total)
@@ -207,16 +208,6 @@ def _progress(done: int | None, total: int) -> int | None:
 def _run_progress(result: RunResult, total: int) -> int | None:
     counts = [s.trials_run for s in result.subsets.values() if s.trials_run is not None]
     return _progress(sum(counts) if counts else None, total)
-
-
-def _live_progress(store: EvalStore, job_id: str, subsets: list[str], total: int) -> int | None:
-    """A running job's progress, from the results its gateways dump every minute."""
-    runs = sorted(store.runs.glob(f"{job_id}__*"))
-    if not runs:
-        return None
-    counts = [trials_started(runs[-1] / name / "gateway-results.json") for name in subsets]
-    known = [count for count in counts if count is not None]
-    return _progress(sum(known), total) if known else 0
 
 
 def _time_taken_s(result: RunResult, config: QueueConfig) -> float | None:
@@ -342,8 +333,7 @@ def _team_activity(
             (
                 job.enqueued_at,
                 {"status": "running", "submission_id": job.submission_id,
-                 "submitted_at": _iso(job.enqueued_at), "started_at": _iso(job.claimed_at),
-                 "progress": _live_progress(store, job.job_id, expected, total_trials)},
+                 "submitted_at": _iso(job.enqueued_at), "started_at": _iso(job.claimed_at)},
             )
         )
         marker = store.deferred / f"{team_id}.json"
@@ -385,7 +375,8 @@ def _team_activity(
                     "finished_at": _iso(result.finished_at),
                     "ranked": result.run_id == ranked_run,
                     "error_code": result.error_code.value if result.error_code else None,
-                    "progress": _run_progress(result, total_trials) if finished else None,
+                    # Only once a run has ended, and only one that started evaluating.
+                    **({"progress": _run_progress(result, total_trials)} if finished else {}),
                 },
             )
         )
