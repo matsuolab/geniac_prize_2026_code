@@ -77,7 +77,7 @@ hf upload team-alpha-org/capx-submission submission.yaml submission.yaml --commi
 結果は運営が案内するリーダーボードに出ます。提出ごとのステータスは done / running / waiting / deferred /
 cancelled / over-time / rejected / failed で、却下（rejected）や失敗（failed・over-time）にはその理由の
 エラーコードが番号（E01 など）で横に出ます。エラーの文面やログはリーダーボードには出ません。
-評価中と終了した提出には、全ベンチマークを合わせた試行のうち実行済みの割合が整数の % で出ます（切り捨て）。試行の数そのものは出ません。
+評価中と終了した提出には、全ベンチマークを合わせた試行のうち開始済みの割合が整数の % で出ます（切り捨て）。試行の数そのものは出ません。
 
 | コード | エラーコード | 意味 |
 |---|---|---|
