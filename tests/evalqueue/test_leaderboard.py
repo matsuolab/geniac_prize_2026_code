@@ -322,6 +322,31 @@ def test_each_team_lists_its_running_deferred_and_waiting_submissions(tmp_path):
     assert all(set(a) >= {"status", "submission_id"} for rs in rows.values() for a in rs)
 
 
+def test_progress_is_a_floored_percent_of_every_trial_and_never_a_count(tmp_path):
+    # Two one-trial packs: two trials in all.
+    store, activity = _activity(tmp_path)
+    queue = FileQueue(store)
+    queue.enqueue(_job("alpha", 1))
+    assert queue.claim("w1")
+    assert activity()["alpha"][0]["progress"] is None  # no run dir yet
+    run = store.runs / "alpha__1__20261001T000000Z" / "rs"
+    run.mkdir(parents=True)
+    assert activity()["alpha"][0]["progress"] == 0  # started, no gateway dump yet
+    (run / "gateway-results.json").write_text(json.dumps({"scores": [0.0]}))
+    assert activity()["alpha"][0]["progress"] == 50
+
+    rs, lib = _subset({"t": 1.0}, trials=1), _subset({"t": 0.0}, status="failed", trials=1)
+    rs.trials_run, lib.trials_run = 1, 0
+    _result(store, "beta", 1, rs, lib, status=RunStatus.FAILED)
+    _result(store, "gamma", 1, _subset({"t": 1.0}, trials=1), _subset({"t": 1.0}, trials=1))
+    rows = activity()
+    assert rows["beta"][0]["progress"] == 50
+    assert rows["gamma"][0]["progress"] is None  # a result from before the count was kept
+
+    snapshot = json.dumps(build_snapshot(_config(tmp_path), store))
+    assert "trials_run" not in snapshot and "scores" not in snapshot
+
+
 def test_a_stale_deferral_marker_is_not_shown(tmp_path):
     store, activity = _activity(tmp_path)
     (store.deferred / "alpha.json").write_text(

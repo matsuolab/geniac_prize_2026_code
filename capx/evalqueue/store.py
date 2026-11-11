@@ -85,6 +85,15 @@ class EvalStore:
         return path
 
 
+def trials_started(results_path: Path) -> int | None:
+    """Trials a gateway has started, from its results dump (one score per episode,
+    recorded at its reset); None while there is no readable dump."""
+    try:
+        return len(json.loads(results_path.read_text())["scores"])
+    except (OSError, ValueError, KeyError, TypeError):
+        return None
+
+
 def write_json_atomic(path: Path, document: object) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     # Beside the target: rename is only atomic within one filesystem.
@@ -97,6 +106,7 @@ __all__ = [
     "EvalStore",
     "job_id_for",
     "run_id_for",
+    "trials_started",
     "utcnow",
     "write_json_atomic",
 ]

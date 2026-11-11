@@ -43,7 +43,7 @@ from capx.evalqueue.config import QueueConfig, RemoteBackendConfig, SubsetConfig
 from capx.evalqueue.deadline import past_deadline
 from capx.evalqueue.models import ErrorCode, QueueJob, RunResult, RunStatus, SubsetResult
 from capx.evalqueue.scratch import StorageLimit
-from capx.evalqueue.store import EvalStore, utcnow
+from capx.evalqueue.store import EvalStore, trials_started, utcnow
 from capx.protocol.framing import check_unix_path
 from capx.protocol.taskpack import TaskPackManifest, load_pack, pack_dirs
 
@@ -656,6 +656,7 @@ class EvalRunner:
             started_at=started_at,
             finished_at=finished_at,
             duration_s=(finished_at - started_at).total_seconds(),
+            trials_run=trials_started(run_dir / subset.name / "gateway-results.json"),
         )
 
     def _run_subset(

@@ -89,6 +89,8 @@
   td .pill.best { margin-left: .5rem; }
   .pill.code { --c: var(--mut); font-variant-numeric: tabular-nums; }
   td .pill.code { margin-left: .5rem; }
+  .progress { color: var(--mut); font-size: .72rem; font-weight: 600; font-variant-numeric: tabular-nums; }
+  td .progress { margin-left: .5rem; }
 
   dl.legend { display: grid; grid-template-columns: max-content 1fr; gap: .55rem 1rem; margin: 0;
     padding: 1rem 1.1rem; font-size: .88rem; }
@@ -135,6 +137,7 @@
   <dt><span class="pill rejected">rejected</span></dt><dd>refused before running (invalid submission.yaml, missing or oversized image, bad weights)</dd>
   <dt><span class="pill failed">failed</span></dt><dd>the evaluation could not finish. If the submission's process exited early, or was stopped for writing more than allowed, it is scored and ranked on what was recorded until then</dd>
   <dt><span class="pill best" id="bestTag">best</span></dt><dd>the submission the team is ranked by</dd>
+  <dt><span class="progress">37%</span></dt><dd>share of the submission's trials that have run, all benchmarks together, rounded down</dd>
 </dl>
 </div>
 
@@ -227,6 +230,7 @@ const CODE_INDEX = {
 };
 const codeLabel = code => CODE_INDEX[code] ?? code;
 const codeTag = code => { const t = el("span", codeLabel(code), "pill code"); t.title = ERROR_CODES[code] ?? ""; return t; };
+const withProgress = (cell, a) => { if (a.progress != null) cell.append(el("span", `${a.progress}%`, "progress")); return cell; };
 // A code the page does not know is shown as it is.
 {
   const body = document.createElement("tbody");
@@ -265,6 +269,7 @@ function renderHistory(d) {
     (all ? t.activity : t.activity.slice(0, shown)).forEach(a => {
       const status = td(el("span", a.status + (a.position ? ` #${a.position}` : ""), "pill " + a.status));
       if (a.error_code) status.append(codeTag(a.error_code));
+      withProgress(status, a);
       const sub = td(a.submission_id ?? "");
       if (a.ranked) sub.append(el("span", tag, "pill best"));
       group.append(tr([status, sub, td(when(a.submitted_at), "num mut"), td(when(a.finished_at), "num mut"),
@@ -304,7 +309,7 @@ function renderQueue(d) {
     const time = td("", "num elapsed" + (a.status === "running" ? "" : " mut"));
     time.dataset.since = a.started_at || a.submitted_at || "";
     body.append(tr([td(a.team, "team-name"), td(a.submission_id ?? "", "mut"),
-      td(el("span", a.status + (a.position ? ` #${a.position}` : ""), "pill " + a.status)), td(when(a.submitted_at), "num mut"), time]));
+      withProgress(td(el("span", a.status + (a.position ? ` #${a.position}` : ""), "pill " + a.status)), a), td(when(a.submitted_at), "num mut"), time]));
   });
   if (!rows.length) { const c = td("The queue is empty.", "empty"); c.colSpan = 5; body.append(tr([c])); }
   document.getElementById("queue").replaceChildren(
