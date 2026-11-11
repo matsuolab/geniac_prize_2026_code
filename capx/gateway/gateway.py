@@ -262,6 +262,8 @@ class GatewaySession:
             if outcome.terminated or outcome.truncated:
                 # The env ended the episode itself; a later step must not reach it.
                 active.cycles = limit
+            if active.cycles >= limit:
+                shared.timing.reach_limit(episode_id)
             shared.scoring.record(episode_id, task_id=active.spec.task_id, reward=reward)
             if stopped is not None:
                 raise stopped
@@ -292,8 +294,10 @@ class GatewaySession:
         """End the lane's episode, keeping its charged trial and score."""
         if self._active is not None:
             episode_id = self._active.episode.episode_id
+            # A lane is also closed when the submission is stopped at the end of the job.
+            how = "reset" if self._shared.referee.job_open() else "cut"
             self._shared.referee.end_episode(episode_id)
-            self._shared.timing.end(episode_id)
+            self._shared.timing.end(episode_id, how)
             self._active = None
 
     def _step_obs(self, active: _Active, action: RawAction) -> ProprioObs | FullObs:

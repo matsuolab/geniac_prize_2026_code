@@ -136,7 +136,7 @@
   <dt><span class="pill rejected">却下</span></dt><dd>実行前に拒否された（submission.yaml の不備、イメージの欠落やサイズ超過、不正な重み）</dd>
   <dt><span class="pill failed">失敗</span></dt><dd>評価が最後まで行えなかった。提出物のプロセスが途中で終了したとき（書き込める量を超えて止めたときを含む）は、それまでの記録で採点し、順位にも入る</dd>
   <dt><span class="pill best" id="bestTag">ベスト</span></dt><dd>そのチームの順位に使われる提出</dd>
-  <dt><span class="pill code">37%</span></dt><dd>評価終了後に表示：全ベンチマークの試行のうち実行できた割合（切り捨て）</dd>
+  <dt><span class="pill code">37%</span></dt><dd>評価終了後に表示：全ベンチマークの試行のうち終了した割合（切り捨て）</dd>
 </dl>
 </div>
 
@@ -208,7 +208,7 @@ const codeTag = code => { const t = el("span", codeLabel(code), "pill code"); t.
 function statusTag(a) {
   if (["failed", "rejected"].includes(a.status)) return a.error_code ? codeTag(a.error_code) : null;
   if (a.progress == null) return null;
-  const t = el("span", `${a.progress}%`, "pill code"); t.title = "全ベンチマークの試行のうち実行できた割合"; return t;
+  const t = el("span", `${a.progress}%`, "pill code"); t.title = "全ベンチマークの試行のうち終了した割合"; return t;
 }
 // A code the page does not know is shown as it is.
 {

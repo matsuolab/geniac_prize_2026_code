@@ -197,16 +197,16 @@ def _total_trials(config: QueueConfig) -> int:
 
 
 def _progress(done: int | None, total: int) -> int | None:
-    """Trials started as a whole percent of all of them, rounded down so that 100 means every
-    trial started. Only the percent of a finished run is published: the counts would give
-    the pack's size."""
+    """Trials finished as a whole percent of all of them, rounded down so that 100 means
+    every trial finished. Only the percent of a finished run is published: the counts
+    would give the pack's size."""
     if done is None or total <= 0:
         return None
     return min(100, done * 100 // total)
 
 
 def _run_progress(result: RunResult, total: int) -> int | None:
-    counts = [s.trials_run for s in result.subsets.values() if s.trials_run is not None]
+    counts = [s.trials_finished for s in result.subsets.values() if s.trials_finished is not None]
     return _progress(sum(counts) if counts else None, total)
 
 

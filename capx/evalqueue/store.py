@@ -85,11 +85,14 @@ class EvalStore:
         return path
 
 
-def trials_started(results_path: Path) -> int | None:
-    """Trials a gateway has started, from its results dump (one score per episode,
-    recorded at its reset); None while there is no readable dump."""
+def trials_finished(results_path: Path) -> int | None:
+    """Trials that ended on their own terms (ran to their step limit, or the submission
+    reset or closed them), from a gateway's results dump. Trials the job's end cut off
+    do not count; voided ones are not in the dump. None without a readable dump, or
+    one from a gateway that did not record how its episodes ended."""
     try:
-        return len(json.loads(results_path.read_text())["scores"])
+        episodes = json.loads(results_path.read_text())["timings"]["episodes"]
+        return sum(e["ended"] in ("steplimit", "reset") for e in episodes)
     except (OSError, ValueError, KeyError, TypeError):
         return None
 
@@ -106,7 +109,7 @@ __all__ = [
     "EvalStore",
     "job_id_for",
     "run_id_for",
-    "trials_started",
+    "trials_finished",
     "utcnow",
     "write_json_atomic",
 ]

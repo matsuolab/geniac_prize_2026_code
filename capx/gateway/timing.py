@@ -29,6 +29,11 @@ class EpisodeTiming:
     The episode itself goes on (success is not told to the submission), so ``steps``
     alone overstates what a success took."""
     wall_to_success_s: float | None = None
+    ended: str | None = None
+    """How the trial ended: ``steplimit`` (it ran to ``trial_steplimit`` or the env
+    ended it), ``reset`` (the submission moved on or closed the lane while the job was
+    open) or ``cut`` (the job ended under it: budget, ``finish`` or the organizer).
+    None while it runs. A voided (``env_crash``) episode is dropped, not ended."""
 
     def wall_s(self, now: float) -> float:
         return (self.ended_at if self.ended_at is not None else now) - self.started_at
@@ -52,6 +57,7 @@ class EpisodeTiming:
             "wall_to_success_s": (
                 None if self.wall_to_success_s is None else round(self.wall_to_success_s, 3)
             ),
+            "ended": self.ended,
         }
 
 
@@ -69,11 +75,19 @@ class Timings:
                 episode_id=episode_id, task_id=task_id, started_at=self._clock()
             )
 
-    def end(self, episode_id: str) -> None:
+    def end(self, episode_id: str, how: str) -> None:
         with self._lock:
             timing = self._episodes.get(episode_id)
             if timing is not None and timing.ended_at is None:
                 timing.ended_at = self._clock()
+                timing.ended = timing.ended or how
+
+    def reach_limit(self, episode_id: str) -> None:
+        """The trial has run its course; it stays the lane's until the next reset."""
+        with self._lock:
+            timing = self._episodes.get(episode_id)
+            if timing is not None and timing.ended is None:
+                timing.ended = "steplimit"
 
     def drop(self, episode_id: str) -> None:
         """Forget a voided episode, matching ``Scoring.drop``."""

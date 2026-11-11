@@ -202,3 +202,27 @@ def test_a_success_partway_through_a_repeat_counts_the_cycles_up_to_it() -> None
 def test_an_episode_that_never_succeeds_logs_no_success() -> None:
     episode = _episode_after(at=None, repeats=[1] * 4)
     assert episode["steps_to_success"] is None and episode["wall_to_success_s"] is None
+
+
+def test_each_trial_logs_how_it_ended() -> None:
+    """Run to its step limit or moved on from by the submission, a trial finished; one
+    the end of the job stopped was cut off. The leaderboard counts only the first two."""
+    clock = FakeClock()
+    gateway = Gateway(
+        make_tasks(n_trials=5), TimedFactory(clock), EnforcementMode.DEV, clock=clock,
+        job_timeout_s=60.0,
+    )
+    lane = gateway.acquire()
+    client = EnvClient(InProcessTransport(lane))
+    step = FrankaRawAction(joints=VALID_JOINTS, gripper=0.0, repeat=50)
+    ran_out = client.reset("t").episode_id
+    client.step(ran_out, step)
+    client.step(ran_out, step)  # 100 cycles: the trial's step limit
+    moved_on = client.reset("t").episode_id
+    client.step(moved_on, step)
+    cut = client.reset("t").episode_id
+    clock.advance(120.0)  # past the job budget
+    gateway.release(lane)  # the submission is stopped
+
+    ended = {e["episode_id"]: e["ended"] for e in gateway.timings()["episodes"]}
+    assert ended == {ran_out: "steplimit", moved_on: "reset", cut: "cut"}

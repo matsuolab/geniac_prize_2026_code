@@ -337,7 +337,7 @@ def test_progress_is_a_floored_percent_of_every_trial_shown_only_once_finished(t
     assert not any("progress" in a for a in rows)  # nothing while queued or running
 
     rs, lib = _subset({"t": 1.0}, trials=1), _subset({"t": 0.0}, status="failed", trials=1)
-    rs.trials_run, lib.trials_run = 1, 0
+    rs.trials_finished, lib.trials_finished = 1, 0
     _result(store, "beta", 1, rs, lib, status=RunStatus.FAILED)
     _result(store, "gamma", 1, _subset({"t": 1.0}, trials=1), _subset({"t": 1.0}, trials=1))
     rows = activity()
@@ -349,7 +349,7 @@ def test_progress_is_a_floored_percent_of_every_trial_shown_only_once_finished(t
     assert "progress" not in activity()["gamma"][0]  # rejected before it ran
 
     snapshot = json.dumps(build_snapshot(_config(tmp_path), store))
-    assert "trials_run" not in snapshot and "scores" not in snapshot
+    assert "trials_finished" not in snapshot and "scores" not in snapshot
 
 
 def test_a_stale_deferral_marker_is_not_shown(tmp_path):
@@ -585,3 +585,15 @@ def test_a_submission_that_never_reached_the_gateway_is_failed_and_unranked(tmp_
     entry = next(e for e in build_snapshot(_config(tmp_path), store)["leaderboard"] if e["team_id"] == "alpha")
     assert entry["rank"] is None and entry["score"] is None and entry["over_time"] is False
     assert [a["status"] for a in activity()["alpha"]] == ["failed"]
+
+
+def test_only_trials_that_ended_on_their_own_terms_count_as_finished(tmp_path):
+    from capx.evalqueue.store import trials_finished
+
+    dump = tmp_path / "gateway-results.json"
+    assert trials_finished(dump) is None  # no dump
+    episodes = [{"ended": "steplimit"}, {"ended": "reset"}, {"ended": "cut"}, {"ended": None}]
+    dump.write_text(json.dumps({"timings": {"episodes": episodes}}))
+    assert trials_finished(dump) == 2
+    dump.write_text(json.dumps({"timings": {"episodes": [{"steps": 3}]}}))
+    assert trials_finished(dump) is None  # a gateway from before the end was recorded

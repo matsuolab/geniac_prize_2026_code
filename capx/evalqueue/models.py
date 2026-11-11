@@ -329,9 +329,10 @@ class SubsetResult(BaseModel):
     started_at: datetime | None = None
     finished_at: datetime | None = None
     duration_s: float | None = None
-    trials_run: int | None = None
-    """Trials the gateway started, from its results dump. The leaderboard turns it into
-    a share of the pack's trials and never publishes the count. None when unknown."""
+    trials_finished: int | None = None
+    """Trials that ended on their own terms, from the gateway's results dump. The
+    leaderboard turns it into a share of the pack's trials and never publishes the
+    count. None when unknown."""
 
 
 class RunResult(BaseModel):
