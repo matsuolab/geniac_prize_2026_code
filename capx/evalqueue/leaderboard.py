@@ -178,6 +178,38 @@ def _budget_s(config: QueueConfig, subset: SubsetConfig) -> float:
     return _budget_cache[key]
 
 
+_trials_cache: dict[tuple[str, tuple[str, ...]], int] = {}
+
+
+def _total_trials(config: QueueConfig) -> int:
+    """Every trial a submission is evaluated on, all subsets together."""
+    total = 0
+    for subset in config.subsets:
+        key = (subset.taskpack, tuple(subset.simulators))
+        if key not in _trials_cache:
+            manifest, _ = load_pack(config.resolve(subset.taskpack))
+            wanted = set(subset.simulators)
+            _trials_cache[key] = sum(
+                task.n_trials for task in manifest.tasks if not wanted or task.simulator in wanted
+            )
+        total += _trials_cache[key]
+    return total
+
+
+def _progress(done: int | None, total: int) -> int | None:
+    """Trials finished as a whole percent of all of them, rounded down so that 100 means
+    every trial finished. Only the percent of a finished run is published: the counts
+    would give the pack's size."""
+    if done is None or total <= 0:
+        return None
+    return min(100, done * 100 // total)
+
+
+def _run_progress(result: RunResult, total: int) -> int | None:
+    counts = [s.trials_finished for s in result.subsets.values() if s.trials_finished is not None]
+    return _progress(sum(counts) if counts else None, total)
+
+
 def _time_taken_s(result: RunResult, config: QueueConfig) -> float | None:
     """How long the submission spent inside the benchmarks, on the clock the referee
     enforces the time limit with: per subset, from the submission's first contact with
@@ -279,6 +311,7 @@ def _team_activity(
     ranked_run: str | None,
     expected: list[str],
     weighting: Weighting | None,
+    total_trials: int,
 ) -> list[dict[str, Any]]:
     """Every submission of a team, the most recently submitted first, each with exactly
     one status, and its score when it has one. The run the team is ranked by carries
@@ -342,6 +375,8 @@ def _team_activity(
                     "finished_at": _iso(result.finished_at),
                     "ranked": result.run_id == ranked_run,
                     "error_code": result.error_code.value if result.error_code else None,
+                    # Only once a run has ended, and only one that started evaluating.
+                    **({"progress": _run_progress(result, total_trials)} if finished else {}),
                 },
             )
         )
@@ -392,6 +427,7 @@ def build_snapshot(config: QueueConfig, store: EvalStore, now: datetime | None =
         (e for e in board if e["score"] is None), key=lambda e: e["team_id"]
     )
 
+    total_trials = _total_trials(config)
     ranking = RankingBook(store)
     teams = [
         {
@@ -405,6 +441,7 @@ def build_snapshot(config: QueueConfig, store: EvalStore, now: datetime | None =
                 entries[team_id][1],
                 expected,
                 weighting,
+                total_trials,
             ),
             "ranking": _ranking_view(ranking.get(team_id)),
         }

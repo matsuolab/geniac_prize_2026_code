@@ -181,6 +181,14 @@ class Referee:
         )
         return int(rng.integers(0, 2**31 - 1))
 
+    def job_open(self) -> bool:
+        """Whether the submission may still act: not finished, ended or out of budget."""
+        try:
+            self.check_job_budget()
+        except GatewayError:
+            return False
+        return True
+
     def check_job_budget(self) -> None:
         self.check_not_finished()
         if self._job_timeout_s is None or self._job_start is None:

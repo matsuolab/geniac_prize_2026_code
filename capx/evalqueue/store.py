@@ -85,6 +85,18 @@ class EvalStore:
         return path
 
 
+def trials_finished(results_path: Path) -> int | None:
+    """Trials that ended on their own terms (ran to their step limit, or the submission
+    reset or closed them), from a gateway's results dump. Trials the job's end cut off
+    do not count; voided ones are not in the dump. None without a readable dump, or
+    one from a gateway that did not record how its episodes ended."""
+    try:
+        episodes = json.loads(results_path.read_text())["timings"]["episodes"]
+        return sum(e["ended"] in ("steplimit", "reset") for e in episodes)
+    except (OSError, ValueError, KeyError, TypeError):
+        return None
+
+
 def write_json_atomic(path: Path, document: object) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     # Beside the target: rename is only atomic within one filesystem.
@@ -97,6 +109,7 @@ __all__ = [
     "EvalStore",
     "job_id_for",
     "run_id_for",
+    "trials_finished",
     "utcnow",
     "write_json_atomic",
 ]

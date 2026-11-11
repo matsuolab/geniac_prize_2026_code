@@ -11,6 +11,7 @@ from __future__ import annotations
 from test_http_transport import CAMERA, VALID_JOINTS, FakeEnv, make_tasks
 
 from capx.gateway import EnforcementMode, Gateway
+from capx.gateway.low_level import StepOutcome
 from capx.protocol import EnvClient, FrankaRawAction, InProcessTransport
 
 
@@ -150,3 +151,78 @@ def test_a_voided_episode_leaves_no_timing_behind() -> None:
 
     assert gateway.timings()["episodes"] == []
     assert CAMERA  # the fake env is the one the rest of the suite uses
+
+
+class SucceedingEnv(FakeEnv):
+    """Achieves the task on its ``at``-th control cycle and stays achieved."""
+
+    def __init__(self, clock: FakeClock, at: int | None) -> None:
+        super().__init__()
+        self._clock, self._at, self._cycles = clock, at, 0
+
+    def apply_raw_action(self, action):  # noqa: ANN001 - matches LowLevelEnv
+        self._clock.advance(0.1)
+        super().apply_raw_action(action)
+        self._cycles += 1
+        return StepOutcome(success=self._at is not None and self._cycles >= self._at)
+
+
+class SucceedingFactory:
+    def __init__(self, clock: FakeClock, at: int | None) -> None:
+        self._clock, self._at = clock, at
+
+    def build(self, spec) -> SucceedingEnv:  # noqa: ANN001
+        return SucceedingEnv(self._clock, self._at)
+
+
+def _episode_after(at: int | None, repeats: list[int]) -> dict:
+    clock = FakeClock()
+    gateway = Gateway(make_tasks(), SucceedingFactory(clock, at), EnforcementMode.DEV, clock=clock)
+    client = EnvClient(InProcessTransport(gateway.acquire()))
+    reset = client.reset("t")
+    for repeat in repeats:
+        clock.advance(1.0)
+        action = FrankaRawAction(joints=VALID_JOINTS, gripper=0.0, repeat=repeat)
+        client.step(reset.episode_id, action)
+    return next(e for e in gateway.timings()["episodes"] if e["episode_id"] == reset.episode_id)
+
+
+def test_the_first_success_is_logged_with_its_cycle_count_and_wall_time() -> None:
+    episode = _episode_after(at=3, repeats=[1] * 6)
+    assert episode["steps"] == 6  # the episode went on after succeeding
+    assert episode["steps_to_success"] == 3
+    assert episode["wall_to_success_s"] == 3.3  # 3 x (1.0 s of the submission + one 0.1 s cycle)
+
+
+def test_a_success_partway_through_a_repeat_counts_the_cycles_up_to_it() -> None:
+    episode = _episode_after(at=7, repeats=[5, 5])
+    assert episode["steps"] == 10 and episode["steps_to_success"] == 7
+
+
+def test_an_episode_that_never_succeeds_logs_no_success() -> None:
+    episode = _episode_after(at=None, repeats=[1] * 4)
+    assert episode["steps_to_success"] is None and episode["wall_to_success_s"] is None
+
+
+def test_each_trial_logs_how_it_ended() -> None:
+    """Run to its step limit or moved on from by the submission, a trial finished; one
+    the end of the job stopped was cut off. The leaderboard counts only the first two."""
+    clock = FakeClock()
+    gateway = Gateway(
+        make_tasks(n_trials=5), TimedFactory(clock), EnforcementMode.DEV, clock=clock,
+        job_timeout_s=60.0,
+    )
+    lane = gateway.acquire()
+    client = EnvClient(InProcessTransport(lane))
+    step = FrankaRawAction(joints=VALID_JOINTS, gripper=0.0, repeat=50)
+    ran_out = client.reset("t").episode_id
+    client.step(ran_out, step)
+    client.step(ran_out, step)  # 100 cycles: the trial's step limit
+    moved_on = client.reset("t").episode_id
+    client.step(moved_on, step)
+    cut = client.reset("t").episode_id
+    clock.advance(120.0)  # past the job budget
+    gateway.release(lane)  # the submission is stopped
+
+    ended = {e["episode_id"]: e["ended"] for e in gateway.timings()["episodes"]}
+    assert ended == {ran_out: "steplimit", moved_on: "reset", cut: "cut"}

@@ -33,6 +33,11 @@ FIND_CONTAINER_S = 60.0
 """How long after the submission starts its container's /proc must have been found:
 past that, what it holds open cannot be measured, which counts as over the limit."""
 
+EXIT_GRACE_S = 1.0
+"""How long a process whose descriptors were refused is watched for ending. One that is
+exiting has released its memory, so its /proc entries turn root's before its descriptors
+close; once it is a zombie it holds none."""
+
 MAX_DEPTH = 256
 """How many directories deep a measurement goes before it counts the tree as over the
 limit. It holds one directory open per level, and no real tree comes near this."""
@@ -197,7 +202,8 @@ def _held_open(procfs: int, prefixes: tuple[str, ...]) -> Iterator[os.stat_resul
     ``procfs`` holds open. A process of this user whose descriptors cannot be read (it
     made itself not dumpable, before or during the look) is :class:`UnmeasurableError`,
     and so is a /proc that can no longer be read. A process or descriptor that goes away
-    meanwhile is skipped, and so is a process of another user."""
+    meanwhile is skipped, and so is one that is exiting or a zombie, and a process of
+    another user."""
     try:
         processes = [name for name in os.listdir(procfs) if name.isdigit()]
     except OSError as exc:
@@ -212,12 +218,16 @@ def _held_open(procfs: int, prefixes: tuple[str, ...]) -> Iterator[os.stat_resul
         except _GONE:
             continue
         except PermissionError as exc:
+            if _exits(procfs, process):
+                continue
             raise UnmeasurableError(f"cannot see what process {process} holds open") from exc
         try:
             yield from _deleted_files(descriptors, prefixes)
         except _GONE:
             continue
         except PermissionError as exc:
+            if _exits(procfs, process):
+                continue
             raise UnmeasurableError(f"cannot see what process {process} holds open") from exc
         finally:
             os.close(descriptors)
@@ -238,6 +248,23 @@ def _deleted_files(descriptors: int, prefixes: tuple[str, ...]) -> Iterator[os.s
             continue  # closed since the listing
         if stat.S_ISREG(info.st_mode) and info.st_nlink == 0:
             yield info
+
+
+def _exits(procfs: int, process: str) -> bool:
+    """Whether a process whose descriptors were refused is ending: gone, a zombie or dead
+    within :data:`EXIT_GRACE_S`. A live one that stays unreadable made itself so."""
+    deadline = time.monotonic() + EXIT_GRACE_S
+    while True:
+        try:
+            with open(os.open(f"{process}/stat", os.O_RDONLY, dir_fd=procfs)) as handle:
+                state = handle.read().rpartition(")")[2].split()[0]
+        except _GONE:
+            return True
+        if state in ("Z", "X", "x"):
+            return True
+        if time.monotonic() >= deadline:
+            return False
+        time.sleep(0.05)
 
 
 def _real_uid(procfs: int, process: str) -> int:

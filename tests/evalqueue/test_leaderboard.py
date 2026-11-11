@@ -322,6 +322,36 @@ def test_each_team_lists_its_running_deferred_and_waiting_submissions(tmp_path):
     assert all(set(a) >= {"status", "submission_id"} for rs in rows.values() for a in rs)
 
 
+def test_progress_is_a_floored_percent_of_every_trial_shown_only_once_finished(tmp_path):
+    # Two one-trial packs: two trials in all.
+    store, activity = _activity(tmp_path)
+    queue = FileQueue(store)
+    queue.enqueue(_job("alpha", 1))
+    assert queue.claim("w1")
+    run = store.runs / "alpha__1__20261001T000000Z" / "rs"
+    run.mkdir(parents=True)
+    (run / "gateway-results.json").write_text(json.dumps({"scores": [0.0]}))
+    queue.enqueue(_job("alpha", 2, enqueued=1))
+    rows = activity()["alpha"]
+    assert [a["status"] for a in rows] == ["waiting", "running"]
+    assert not any("progress" in a for a in rows)  # nothing while queued or running
+
+    rs, lib = _subset({"t": 1.0}, trials=1), _subset({"t": 0.0}, status="failed", trials=1)
+    rs.trials_finished, lib.trials_finished = 1, 0
+    _result(store, "beta", 1, rs, lib, status=RunStatus.FAILED)
+    _result(store, "gamma", 1, _subset({"t": 1.0}, trials=1), _subset({"t": 1.0}, trials=1))
+    rows = activity()
+    assert rows["beta"][0]["progress"] == 50
+    assert rows["gamma"][0]["progress"] is None  # a result from before the count was kept
+    store.publish_result(RunResult(run_id="gamma__2", job_id="gamma__2", team_id="gamma",
+                                   submission_id="s2", status=RunStatus.REJECTED,
+                                   finished_at=T0 + timedelta(hours=1)))
+    assert "progress" not in activity()["gamma"][0]  # rejected before it ran
+
+    snapshot = json.dumps(build_snapshot(_config(tmp_path), store))
+    assert "trials_finished" not in snapshot and "scores" not in snapshot
+
+
 def test_a_stale_deferral_marker_is_not_shown(tmp_path):
     store, activity = _activity(tmp_path)
     (store.deferred / "alpha.json").write_text(
@@ -555,3 +585,15 @@ def test_a_submission_that_never_reached_the_gateway_is_failed_and_unranked(tmp_
     entry = next(e for e in build_snapshot(_config(tmp_path), store)["leaderboard"] if e["team_id"] == "alpha")
     assert entry["rank"] is None and entry["score"] is None and entry["over_time"] is False
     assert [a["status"] for a in activity()["alpha"]] == ["failed"]
+
+
+def test_only_trials_that_ended_on_their_own_terms_count_as_finished(tmp_path):
+    from capx.evalqueue.store import trials_finished
+
+    dump = tmp_path / "gateway-results.json"
+    assert trials_finished(dump) is None  # no dump
+    episodes = [{"ended": "steplimit"}, {"ended": "reset"}, {"ended": "cut"}, {"ended": None}]
+    dump.write_text(json.dumps({"timings": {"episodes": episodes}}))
+    assert trials_finished(dump) == 2
+    dump.write_text(json.dumps({"timings": {"episodes": [{"steps": 3}]}}))
+    assert trials_finished(dump) is None  # a gateway from before the end was recorded

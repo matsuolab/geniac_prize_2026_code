@@ -51,6 +51,7 @@
   .section-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 1rem; flex-wrap: wrap; }
   .section-head select { margin-bottom: .6rem; }
   .note { color: var(--mut); font-size: .82rem; margin: -.3rem 0 .6rem; }
+  .card + .note { margin-top: .6rem; }  /* a note after a table, not under a heading */
 
   .card { background: var(--panel); border: 1px solid var(--border); border-radius: .75rem;
     box-shadow: var(--shadow); overflow-x: auto; }
@@ -87,7 +88,8 @@
   .over-time { --c: var(--over); } .done { --c: var(--done); }
   .pill.best { color: #fff; background: var(--fill); }
   td .pill.best { margin-left: .5rem; }
-  td .code { margin-left: .5rem; font-size: .72rem; }
+  .pill.code { --c: var(--mut); font-variant-numeric: tabular-nums; }
+  td .pill.code { margin-left: .5rem; }
 
   dl.legend { display: grid; grid-template-columns: max-content 1fr; gap: .55rem 1rem; margin: 0;
     padding: 1rem 1.1rem; font-size: .88rem; }
@@ -134,13 +136,14 @@
   <dt><span class="pill rejected">却下</span></dt><dd>実行前に拒否された（submission.yaml の不備、イメージの欠落やサイズ超過、不正な重み）</dd>
   <dt><span class="pill failed">失敗</span></dt><dd>評価が最後まで行えなかった。提出物のプロセスが途中で終了したとき（書き込める量を超えて止めたときを含む）は、それまでの記録で採点し、順位にも入る</dd>
   <dt><span class="pill best" id="bestTag">ベスト</span></dt><dd>そのチームの順位に使われる提出</dd>
+  <dt><span class="pill code">37%</span></dt><dd>評価終了後に表示：全ベンチマークの試行のうち終了した割合（切り捨て）</dd>
 </dl>
 </div>
 
 <h2>エラーコード</h2>
-<p class="note">提出が却下・失敗した理由。ステータスの横に出ます。</p>
+<p class="note">提出が却下・失敗した理由。履歴の行ではステータスの横にコードが出ます（マウスを重ねると意味が出ます）。</p>
 <div class="card">
-<dl class="legend" id="codes"></dl>
+<table id="codes"></table>
 </div>
 
 <script>
@@ -180,9 +183,40 @@ const ERROR_CODES = {
   no_score: "スコアが出なかった",
   internal_error: "運営側の問題（運営が確認します）",
 };
-// The code is an enum value from the queue; an unknown one is shown as it is.
-const codeTag = code => { const t = el("span", code, "code mut"); t.title = ERROR_CODES[code] ?? ""; return t; };
-document.getElementById("codes").append(...Object.entries(ERROR_CODES).flatMap(([c, m]) => [el("dt", c, "code"), el("dd", m)]));
+// Rows show a code by this index only. Fixed per code, never renumbered: a new code gets the
+// next free number (tests/evalqueue/test_leaderboard_page.py checks every code has one).
+const CODE_INDEX = {
+  invalid_manifest: "E01",
+  image_not_found: "E02",
+  image_too_large: "E03",
+  image_hash_mismatch: "E04",
+  foreign_repo: "E05",
+  repo_unreadable: "E06",
+  weights_gated: "E07",
+  weights_too_large: "E08",
+  submission_failed: "E09",
+  submission_timeout: "E10",
+  submission_startup_timeout: "E11",
+  submission_storage_exceeded: "E12",
+  no_score: "E13",
+  internal_error: "E14",
+};
+const codeLabel = code => CODE_INDEX[code] ?? code;
+const codeTag = code => { const t = el("span", codeLabel(code), "pill code"); t.title = ERROR_CODES[code] ?? ""; return t; };
+// One tag beside a finished run's status: the error code when it failed or was rejected,
+// otherwise the share of the trials it got through.
+function statusTag(a) {
+  if (["failed", "rejected"].includes(a.status)) return a.error_code ? codeTag(a.error_code) : null;
+  if (a.progress == null) return null;
+  const t = el("span", `${a.progress}%`, "pill code"); t.title = "全ベンチマークの試行のうち終了した割合"; return t;
+}
+// A code the page does not know is shown as it is.
+{
+  const body = document.createElement("tbody");
+  Object.keys(CODE_INDEX).sort((a, b) => CODE_INDEX[a].localeCompare(CODE_INDEX[b])).forEach(c =>
+    body.append(tr([td(codeTag(c)), td(c, "mut"), td(ERROR_CODES[c] ?? "")])));
+  document.getElementById("codes").replaceChildren(head([["コード", ""], ["エラー", ""], ["意味", ""]]), body);
+}
 
 let data = null, lastOk = false;
 const opened = new Set();  // teams whose whole history is unfolded; kept across refreshes
@@ -217,7 +251,7 @@ function renderBoard(d) {
 const RANKING_LABEL = { accepted: "受付済み", rejected: "却下", missing: "提出なし" };
 function rankingText(r) {
   if (!r) return "順位評価：未提出";
-  const detail = r.status === "accepted" ? r.submission_id : r.status === "rejected" ? r.error_code : null;
+  const detail = r.status === "accepted" ? r.submission_id : r.status === "rejected" ? codeLabel(r.error_code) : null;
   return `順位評価：${RANKING_LABEL[r.status] ?? r.status}${detail ? `（${detail}）` : ""}${r.final ? "・締切で確定" : ""}`;
 }
 
@@ -243,7 +277,8 @@ function renderHistory(d) {
     const all = opened.has(t.team_id) || filter.value === t.team_id;
     (all ? t.activity : t.activity.slice(0, shown)).forEach(a => {
       const status = td(statusPill(a));
-      if (a.error_code) status.append(codeTag(a.error_code));
+      const side = statusTag(a);
+      if (side) status.append(side);
       const sub = td(a.submission_id ?? "");
       if (a.ranked) sub.append(el("span", tag, "pill best"));
       group.append(tr([status, sub, td(when(a.submitted_at), "num mut"), td(when(a.finished_at), "num mut"),

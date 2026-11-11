@@ -75,22 +75,23 @@ hf upload team-alpha-org/capx-submission submission.yaml submission.yaml --commi
 順位評価には、同じ形式の `submission_ranking.yaml` を同じリポジトリに push します。
 
 結果は運営が案内するリーダーボードに出ます。提出ごとのステータスは done / running / waiting / deferred /
-cancelled / over-time / rejected / failed で、却下（rejected）や失敗（failed・over-time）にはその理由の
-エラーコードが横に出ます。エラーの文面やログはリーダーボードには出ません。
+cancelled / over-time / rejected / failed で、却下（rejected）や失敗（failed）にはその理由の
+エラーコードが番号（E01 など）で横に出ます。エラーの文面やログはリーダーボードには出ません。
+評価が終わった提出（done・over-time）には、エラーコードの代わりに、全ベンチマークの試行のうち終了した割合が整数の % で横に出ます（切り捨て）。終了した試行は、ステップ上限まで進んだものと、提出物が次の reset や close で終えたものです。時間切れで打ち切られた試行は入りません。評価中や実行前に却下された提出には出ません。
 
-| エラーコード | 意味 |
-|---|---|
-| `invalid_manifest` | submission.yaml が無い、または不正 |
-| `image_not_found` | 指定した revision にイメージが無い |
-| `image_too_large` | イメージがサイズ上限を超えている |
-| `image_hash_mismatch` | イメージが sha256 と一致しない |
-| `foreign_repo` | イメージか重みがチーム自身の org に無い |
-| `repo_unreadable` | リポジトリを読めなかった（アクセス権を確認） |
-| `weights_gated` | 運営がアクセスできない gated な重み |
-| `weights_too_large` | 重みがサイズ上限を超えている |
-| `submission_failed` | 提出物がエラーで終了した |
-| `submission_timeout` | ベンチマークで時間を使い切った |
-| `submission_startup_timeout` | 起動後、時間内にベンチマークへ接続しなかった |
-| `submission_storage_exceeded` | 書き込める量の上限を超えた |
-| `no_score` | スコアが出なかった |
-| `internal_error` | 運営側の問題（運営が確認します） |
+| コード | エラーコード | 意味 |
+|---|---|---|
+| E01 | `invalid_manifest` | submission.yaml が無い、または不正 |
+| E02 | `image_not_found` | 指定した revision にイメージが無い |
+| E03 | `image_too_large` | イメージがサイズ上限を超えている |
+| E04 | `image_hash_mismatch` | イメージが sha256 と一致しない |
+| E05 | `foreign_repo` | イメージか重みがチーム自身の org に無い |
+| E06 | `repo_unreadable` | リポジトリを読めなかった（アクセス権を確認） |
+| E07 | `weights_gated` | 運営がアクセスできない gated な重み |
+| E08 | `weights_too_large` | 重みがサイズ上限を超えている |
+| E09 | `submission_failed` | 提出物がエラーで終了した |
+| E10 | `submission_timeout` | ベンチマークで時間を使い切った |
+| E11 | `submission_startup_timeout` | 起動後、時間内にベンチマークへ接続しなかった |
+| E12 | `submission_storage_exceeded` | 書き込める量の上限を超えた |
+| E13 | `no_score` | スコアが出なかった |
+| E14 | `internal_error` | 運営側の問題（運営が確認します） |
