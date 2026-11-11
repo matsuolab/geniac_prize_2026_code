@@ -90,8 +90,6 @@
   td .pill.best { margin-left: .5rem; }
   .pill.code { --c: var(--mut); font-variant-numeric: tabular-nums; }
   td .pill.code { margin-left: .5rem; }
-  .progress { color: var(--mut); font-size: .72rem; font-weight: 600; font-variant-numeric: tabular-nums; }
-  td .progress { margin-left: .5rem; }
 
   dl.legend { display: grid; grid-template-columns: max-content 1fr; gap: .55rem 1rem; margin: 0;
     padding: 1rem 1.1rem; font-size: .88rem; }
@@ -138,7 +136,7 @@
   <dt><span class="pill rejected">却下</span></dt><dd>実行前に拒否された（submission.yaml の不備、イメージの欠落やサイズ超過、不正な重み）</dd>
   <dt><span class="pill failed">失敗</span></dt><dd>評価が最後まで行えなかった。提出物のプロセスが途中で終了したとき（書き込める量を超えて止めたときを含む）は、それまでの記録で採点し、順位にも入る</dd>
   <dt><span class="pill best" id="bestTag">ベスト</span></dt><dd>そのチームの順位に使われる提出</dd>
-  <dt><span class="progress">37%</span></dt><dd>評価終了後に表示：全ベンチマークの試行のうち実行できた割合（切り捨て）</dd>
+  <dt><span class="pill code">37%</span></dt><dd>評価終了後に表示：全ベンチマークの試行のうち実行できた割合（切り捨て）</dd>
 </dl>
 </div>
 
@@ -205,7 +203,13 @@ const CODE_INDEX = {
 };
 const codeLabel = code => CODE_INDEX[code] ?? code;
 const codeTag = code => { const t = el("span", codeLabel(code), "pill code"); t.title = ERROR_CODES[code] ?? ""; return t; };
-const withProgress = (cell, a) => { if (a.progress != null) cell.append(el("span", `${a.progress}%`, "progress")); return cell; };
+// One tag beside a finished run's status: the error code when it failed or was rejected,
+// otherwise the share of the trials it got through.
+function statusTag(a) {
+  if (["failed", "rejected"].includes(a.status)) return a.error_code ? codeTag(a.error_code) : null;
+  if (a.progress == null) return null;
+  const t = el("span", `${a.progress}%`, "pill code"); t.title = "全ベンチマークの試行のうち実行できた割合"; return t;
+}
 // A code the page does not know is shown as it is.
 {
   const body = document.createElement("tbody");
@@ -273,8 +277,8 @@ function renderHistory(d) {
     const all = opened.has(t.team_id) || filter.value === t.team_id;
     (all ? t.activity : t.activity.slice(0, shown)).forEach(a => {
       const status = td(statusPill(a));
-      if (a.error_code) status.append(codeTag(a.error_code));
-      withProgress(status, a);
+      const tag = statusTag(a);
+      if (tag) status.append(tag);
       const sub = td(a.submission_id ?? "");
       if (a.ranked) sub.append(el("span", tag, "pill best"));
       group.append(tr([status, sub, td(when(a.submitted_at), "num mut"), td(when(a.finished_at), "num mut"),
