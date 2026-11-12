@@ -42,7 +42,9 @@ from capx.evalqueue.models import (
     RunSpec,
     RunStatus,
     SubmissionManifest,
+    WeightsMount,
 )
+from capx.evalqueue.notify import LogNotifier, Notifier
 from capx.evalqueue.queue import FileQueue, new_job
 from capx.evalqueue.ranking import RankingBook, RankingEntry, TeamHead
 from capx.evalqueue.store import EvalStore, job_id_for, run_id_for, utcnow, write_json_atomic
@@ -58,6 +60,9 @@ RETRY_S = 3600.0
 """How long a submission the Hub cannot serve is tried again, a poll at a time, before
 it is refused: an interim one from the first failure, a ranking one from the deadline."""
 
+STALLED_REMINDER_S = 3600.0
+"""How often the organizers are reminded that a running job waits for gated weights."""
+
 
 class SubmissionWatcher:
     def __init__(
@@ -68,12 +73,16 @@ class SubmissionWatcher:
         source: SubmissionSource,
         weights: WeightsCache,
         eval_config: EvalConfig | None = None,
+        notifier: Notifier | None = None,
     ) -> None:
         self._config = config
         self._store = store
         self._queue = queue
         self._source = source
         self._weights = weights
+        self._notifier = notifier or LogNotifier()
+        self._stalled_notified: dict[str, float] = {}
+        """Claimed job id -> when the organizers were last told it waits for weights."""
         self._eval_config = eval_config or load_eval_config()
         self._ranking = RankingBook(store)
         self._heads_lock = threading.Lock()
@@ -112,6 +121,10 @@ class SubmissionWatcher:
         """One scan. Returns the job ids enqueued this pass. From the deadline on,
         nothing is queued, what still waits is cancelled, and each team's ranking
         submission is recorded as it stood at the deadline."""
+        try:
+            self._fetch_missing_weights()
+        except Exception:  # never worth the poll: the next one tries again
+            _logger.exception("fetching the weights queued jobs still lack failed")
         if past_deadline(self._config):
             close_round(self._store, self._queue)
             self._sweep_every_team()
@@ -154,10 +167,10 @@ class SubmissionWatcher:
             return None
 
         try:
-            manifest = self._accept(candidate)
+            manifest, awaiting = self._accept(candidate)
             image = self._source.fetch(candidate)
             self._verify(image, manifest)
-            self._weights.fetch(manifest.weights)
+            self._weights.fetch([mount for mount in manifest.weights if mount not in awaiting])
         except Rejected as exc:
             if exc.transient and self._still_trying(attempt_id):
                 _logger.warning("%s: %s; trying again next poll", job_id, exc)
@@ -199,7 +212,42 @@ class SubmissionWatcher:
         self._mark_seen(job_id, candidate.team_id, enqueued=True)
         self._done_trying(attempt_id)
         _logger.info("enqueued %s from %s", job_id, candidate.origin)
+        if awaiting:
+            self._notifier.notify(
+                f"{job_id} declares gated weights the organizer account cannot download yet: "
+                f"{_repos(awaiting)}. Accept their terms on HuggingFace with the organizer "
+                "account. The job keeps its place in the queue, and evaluation stops when it "
+                "reaches the front until then."
+            )
         return job_id
+
+    def _fetch_missing_weights(self) -> None:
+        """Fetch what queued jobs still lack, running jobs first, and remind the
+        organizers about each running job that is still waiting."""
+        claimed = self._queue.claimed_jobs()
+        pending = self._queue.pending_jobs()
+        mounts: list[WeightsMount] = []
+        for job in [*claimed, *pending]:
+            mounts.extend(mount for mount in job.weights if mount not in mounts)
+        still_missing = self._weights.fetch_missing(mounts)
+        now = time.monotonic()
+        waiting_ids: set[str] = set()
+        for job in claimed:
+            lacking = [mount for mount in job.weights if mount in still_missing]
+            if not lacking:
+                continue
+            waiting_ids.add(job.job_id)
+            last = self._stalled_notified.get(job.job_id)
+            if last is not None and now - last < STALLED_REMINDER_S:
+                continue
+            self._stalled_notified[job.job_id] = now
+            self._notifier.notify(
+                f"The evaluation queue is stopped: {job.job_id} has reached the front and "
+                f"waits for gated weights {_repos(lacking)}. Accept their terms on "
+                "HuggingFace with the organizer account."
+            )
+        for job_id in self._stalled_notified.keys() - waiting_ids:
+            del self._stalled_notified[job_id]
 
     def _check_ranking(self, candidate: Candidate) -> None:
         """Check a ranking submission without fetching it, once per commit."""
@@ -390,8 +438,9 @@ class SubmissionWatcher:
             return exc
         return None
 
-    def _accept(self, candidate: Candidate) -> SubmissionManifest:
-        """Everything that can be decided without the image's bytes."""
+    def _accept(self, candidate: Candidate) -> tuple[SubmissionManifest, list[WeightsMount]]:
+        """Everything that can be decided without the image's bytes. Also returns the
+        gated weights the organizer account cannot download yet."""
         if candidate.rejection:
             raise candidate.rejection
         if candidate.manifest is None:
@@ -401,16 +450,7 @@ class SubmissionWatcher:
         check_image_size(candidate.image_gb, self._eval_config)
         if manifest.image_sha256 and candidate.image_sha256:
             check_sha256(manifest.image_sha256, candidate.image_sha256)
-        for mount in manifest.weights:
-            if mount.gated:
-                # Only a person can request access for the organizer account.
-                _logger.warning(
-                    "%s declares gated weights %s; the organizer account needs access",
-                    candidate.origin,
-                    describe_mount(mount),
-                )
-        self._weights.check(candidate.team_id, manifest.weights)
-        return manifest
+        return manifest, self._weights.check(candidate.team_id, manifest.weights)
 
     def _verify(self, image: Path, manifest: SubmissionManifest) -> None:
         """Whether the right bytes arrived: ``hf_hub_download`` checks only the length."""
@@ -586,6 +626,10 @@ class SubmissionWatcher:
                 submitted_at=utcnow(),
             )
         )
+
+
+def _repos(mounts: list[WeightsMount]) -> str:
+    return ", ".join(describe_mount(mount) for mount in mounts)
 
 
 def _from_hub(job: QueueJob) -> bool:

@@ -163,6 +163,8 @@ class FakeFetcher:
     sizes: dict[str, int] = field(default_factory=dict)
     gated: set[str] = field(default_factory=set)
     private: set[str] = field(default_factory=set)
+    ungranted: set[str] = field(default_factory=set)
+    """Gated repos the organizer account has not been given access to."""
     described: list[str] = field(default_factory=list)
     downloaded: list[str] = field(default_factory=list)
 
@@ -172,9 +174,12 @@ class FakeFetcher:
             size_bytes=self.sizes.get(mount.repo, 1),
             gated=mount.repo in self.gated,
             private=mount.repo in self.private,
+            accessible=mount.repo not in self.ungranted,
         )
 
     def download(self, mount: WeightsMount, target: Path) -> None:
+        if mount.repo in self.ungranted:
+            raise Rejected(ErrorCode.WEIGHTS_GATED, f"no access to {mount.repo}")
         self.downloaded.append(mount.repo)
         (target / "config.json").write_text("{}")
 

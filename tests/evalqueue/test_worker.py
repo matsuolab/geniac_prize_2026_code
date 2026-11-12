@@ -62,7 +62,7 @@ class StubRunner:
         )
 
 
-def build(tmp_path, runner, *, image_path=None, **settings):
+def build(tmp_path, runner, *, image_path=None, weights=(), **settings):
     config = QueueConfig(root=str(tmp_path), master_seed=1, **settings)
     config.watcher.poll_interval_s = 0.01
     store = EvalStore(tmp_path)
@@ -74,6 +74,7 @@ def build(tmp_path, runner, *, image_path=None, **settings):
             team_id="alpha",
             submission_id="s1",
             image_path=str(image_path or tmp_path / "agent.sif"),
+            weights=list(weights),
             enqueued_at=utcnow(),
         )
     )
@@ -403,6 +404,53 @@ def test_weights_no_queued_job_needs_are_dropped_once_a_job_finishes(tmp_path) -
 
     worker.run_forever(max_jobs=1)
     assert not leftover.exists()
+
+
+GATED = WeightsMount(repo="org/gated", revision="a" * 40, path="/models/g", gated=True)
+
+
+def test_a_job_waits_for_weights_still_being_granted_then_runs(tmp_path, monkeypatch) -> None:
+    """It keeps its claim, so the jobs behind it wait too: none overtakes it."""
+    runner = StubRunner()
+    store, queue, worker = build(tmp_path, runner, weights=[GATED])
+    queue.enqueue(
+        QueueJob(
+            job_id="beta__s1",
+            team_id="beta",
+            submission_id="s1",
+            image_path=str(tmp_path / "agent.sif"),
+            enqueued_at=utcnow(),
+        )
+    )
+    waits: list[int] = []
+
+    def watcher_fetches_on_the_third_look(_seconds: float) -> None:
+        waits.append(1)
+        assert runner.runs == [] and [job.job_id for job in queue.pending_jobs()] == ["beta__s1"]
+        if len(waits) == 3:
+            store.weights_dir(GATED).mkdir(parents=True)
+
+    monkeypatch.setattr(time, "sleep", watcher_fetches_on_the_third_look)
+    assert worker.run_forever(max_jobs=1) == 1
+
+    assert len(waits) == 3
+    assert runner.runs and runner.runs[0].startswith("alpha__s1")
+    assert (store.done / "alpha__s1.json").exists()
+
+
+def test_a_worker_stopped_while_waiting_for_weights_puts_the_job_back(
+    tmp_path, monkeypatch
+) -> None:
+    runner = StubRunner()
+    store, queue, worker = build(tmp_path, runner, weights=[GATED])
+    monkeypatch.setattr(time, "sleep", lambda _seconds: worker.stop())
+
+    assert worker.run_forever() == 0
+
+    assert runner.runs == []
+    assert list(store.results.glob("*.json")) == []
+    (job,) = queue.pending_jobs()
+    assert job.job_id == "alpha__s1" and job.attempts == 0
 
 
 def test_a_running_job_keeps_its_claim_fresh(tmp_path, monkeypatch) -> None:
