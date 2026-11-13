@@ -7,7 +7,7 @@ import socket
 import threading
 from collections.abc import Mapping
 from typing import Any
-from urllib.parse import unquote, urljoin, urlsplit
+from urllib.parse import unquote, urljoin, urlsplit, urlunsplit
 
 import requests
 from requests.adapters import HTTPAdapter
@@ -91,9 +91,19 @@ class _CheckedRedirectSession(requests.Session):
 
     def get_redirect_target(self, resp: requests.Response) -> str | None:
         target = super().get_redirect_target(resp)
-        if target is not None:
-            check_server_url(urljoin(resp.url, target))
-        return target
+        if target is None:
+            return None
+        base = urlsplit(resp.url)
+        location = urlsplit(target)
+        # A server behind a socket sees Host "localhost", so its own redirects
+        # (FastAPI's trailing-slash one included) come back as http://localhost/...
+        # or as a bare path; urljoin cannot resolve either against http+unix.
+        if base.scheme == SCHEME and (
+            not location.netloc or (location.scheme == "http" and location.hostname == "localhost")
+        ):
+            path = urljoin(base.path, location.path)
+            target = urlunsplit((SCHEME, base.netloc, path, location.query, ""))
+        return check_server_url(urljoin(resp.url, target))
 
 
 def new_session() -> requests.Session:

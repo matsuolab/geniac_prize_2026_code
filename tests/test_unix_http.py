@@ -228,6 +228,14 @@ def _echo_app():  # noqa: ANN202
     def to_socket():  # noqa: ANN202
         return fastapi.responses.RedirectResponse("http+unix://echo.sock/echo", status_code=307)
 
+    @app.post("/to-path")
+    def to_path():  # noqa: ANN202
+        return fastapi.responses.RedirectResponse("/echo", status_code=307)
+
+    @app.post("/slash/")
+    def slash(body: dict) -> dict:
+        return {"slash": body}
+
     @app.post("/chat/completions")
     def chat(body: dict) -> dict:
         message = {"role": "assistant", "content": f"hello from {body['model']}"}
@@ -272,6 +280,10 @@ def test_a_redirect_is_followed_only_to_an_allowed_url(echo_server: Path) -> Non
         unix_http_client.post("http+unix://echo.sock/to-tcp", json={"a": 1}, timeout=5)
     reply = unix_http_client.post("http+unix://echo.sock/to-socket", json={"a": 1}, timeout=5)
     assert reply.json() == {"got": {"a": 1}}
+    reply = unix_http_client.post("http+unix://echo.sock/to-path", json={"a": 1}, timeout=5)
+    assert reply.json() == {"got": {"a": 1}}
+    reply = unix_http_client.post("http+unix://echo.sock/slash", json={"a": 1}, timeout=5)
+    assert reply.json() == {"slash": {"a": 1}}
 
 
 def test_a_client_reaches_a_uvicorn_server_over_its_socket(echo_server: Path) -> None:
