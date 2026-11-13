@@ -69,12 +69,16 @@ class WorkerArgs(_Common):
     max_jobs: int | None = None
     """Stop after this many jobs (useful for a one-shot verification run)."""
     worker_id: str | None = None
+    no_recordings: bool = False
+    """Film no episodes (``recordings`` in the queue config)."""
 
 
 @dataclass
 class SuperviseArgs(_Common):
     interval_s: float = 60.0
     once: bool = False
+    no_recordings: bool = False
+    """Start the workers with ``--no-recordings``."""
 
 
 @dataclass
@@ -177,6 +181,8 @@ def hub_status(args: HubStatusArgs) -> None:
 
 def worker(args: WorkerArgs) -> None:
     config, store, queue = _setup(args)
+    if args.no_recordings:
+        config.recordings.enabled = False
     runner = EvalRunner(config, store)
     evaluator = EvalWorker(config, store, queue, runner, worker_id=args.worker_id)
     evaluator.install_signal_handlers()
@@ -191,6 +197,7 @@ def supervise(args: SuperviseArgs) -> None:
         config_path=args.config,
         interval_s=args.interval_s,
         once=args.once,
+        recordings=not args.no_recordings,
     )
 
 

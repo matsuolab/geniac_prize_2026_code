@@ -202,6 +202,19 @@ class SimulatorConfig(BaseModel):
         return self
 
 
+class RecordingsConfig(BaseModel):
+    """Videos of a few episodes of each run, for the organizers only (docs/operations.md)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: bool = True
+    """``capx evalq worker --no-recordings`` turns it off for that worker."""
+    per_simulator: int = Field(default=10, ge=1)
+    """Episodes filmed per simulator in each run, chosen at random."""
+    keep_days: float = Field(default=7.0, gt=0)
+    """A run's videos are deleted this long after the run."""
+
+
 class SlurmConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -238,6 +251,7 @@ class QueueConfig(BaseModel):
     hub: HubConfig = Field(default_factory=HubConfig)
     teams: TeamsConfig = Field(default_factory=TeamsConfig)
     leaderboard: LeaderboardConfig = Field(default_factory=LeaderboardConfig)
+    recordings: RecordingsConfig = Field(default_factory=RecordingsConfig)
     subsets: list[SubsetConfig] = Field(
         min_length=1,
         default_factory=lambda: [
@@ -321,6 +335,7 @@ __all__ = [
     "LeaderboardConfig",
     "QueueConfig",
     "QueueLimits",
+    "RecordingsConfig",
     "RemoteBackendConfig",
     "SimulatorConfig",
     "SlurmConfig",

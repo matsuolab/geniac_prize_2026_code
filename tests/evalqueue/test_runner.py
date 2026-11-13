@@ -2008,3 +2008,34 @@ def test_a_backend_that_exits_starts_again_when_next_asked_for(setup, tmp_path) 
         _eventually(lambda: len(starts) == 2 and len(procs) == 1)
     finally:
         backends.close()
+
+
+def test_only_the_gateway_mounts_the_recordings(setup) -> None:
+    config, store, job, monkeypatch = setup
+    spawn = FakeSpawn()
+    monkeypatch.setattr(runner_module, "_spawn", spawn)
+    EvalRunner(config, store).run(job, "run1")
+
+    gateway = spawn.commands["gateway"]
+    videos = Path(_env_value(gateway, "CAPX_RECORDINGS_DIR"))
+    assert videos == store.recordings / "run1" / "public"
+    assert f"{videos}:{videos}" in _binds(gateway)
+    assert videos.stat().st_mode & 0o077 == 0
+    for name, command in spawn.commands.items():
+        if name == "gateway":
+            continue
+        for bind in _binds(command):
+            source = Path(bind.split(":")[0])
+            assert not (source == store.recordings or store.recordings in source.parents), name
+            assert not (source in store.recordings.parents), (name, source)
+
+
+def test_a_run_without_recordings_mounts_none(setup) -> None:
+    config, store, job, monkeypatch = setup
+    config.recordings.enabled = False
+    spawn = FakeSpawn()
+    monkeypatch.setattr(runner_module, "_spawn", spawn)
+    EvalRunner(config, store).run(job, "run1")
+
+    assert "CAPX_RECORDINGS_DIR" not in _env(spawn.commands["gateway"])
+    assert not (store.recordings / "run1").exists()

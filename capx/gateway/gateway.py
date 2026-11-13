@@ -30,7 +30,8 @@ from typing import Any, Protocol, TypeVar
 import numpy as np
 
 from capx.config import EvalConfig, load_eval_config
-from capx.gateway.low_level import LowLevelEnv, StepOutcome
+from capx.gateway.low_level import LowLevelEnv, Recordable, StepOutcome
+from capx.gateway.recording import Recorder
 from capx.gateway.referee import EnforcementMode, Episode, Referee
 from capx.gateway.scoring import EpisodeScore, Scoring
 from capx.gateway.timing import Timings
@@ -94,6 +95,7 @@ class _Active:
     env: LowLevelEnv
     obs_filter: ObsFilter
     cycles: int = 0
+    recording: bool = False
 
 
 class _InFlight:
@@ -132,6 +134,7 @@ class _Shared:
     timing: Timings
     clock: Callable[[], float]
     in_flight: _InFlight
+    recorder: Recorder | None
 
 
 _logger = logging.getLogger(__name__)
@@ -187,6 +190,7 @@ class GatewaySession:
                 raise self._crash(episode.episode_id, exc) from exc
             shared.timing.add_sim(episode.episode_id, shared.clock() - started, steps=0)
             active = self._active = _Active(episode, spec, built.env, built.obs_filter)
+            active.recording = self._start_recording(active)
             # An unstepped trial still counts as a failure; env_crash later drops it.
             shared.scoring.record(
                 episode.episode_id, task_id=spec.task_id, reward=0.0, success=False
@@ -293,12 +297,43 @@ class GatewaySession:
     def _end_episode(self) -> None:
         """End the lane's episode, keeping its charged trial and score."""
         if self._active is not None:
+            self._save_recording(self._active)
             episode_id = self._active.episode.episode_id
             # A lane is also closed when the submission is stopped at the end of the job.
             how = "reset" if self._shared.referee.job_open() else "cut"
             self._shared.referee.end_episode(episode_id)
             self._shared.timing.end(episode_id, how)
             self._active = None
+
+    def _start_recording(self, active: _Active) -> bool:
+        recorder = self._shared.recorder
+        episode = active.episode
+        if recorder is None or not recorder.wants(episode.task_id, episode.trial_index):
+            return False
+        if not isinstance(active.env, Recordable):
+            return False
+        try:
+            active.env.start_recording(recorder.fps)
+        except Exception:
+            _logger.exception("could not start recording episode %s", episode.episode_id)
+            return False
+        return True
+
+    def _save_recording(self, active: _Active) -> None:
+        recorder = self._shared.recorder
+        if recorder is None or not active.recording or not isinstance(active.env, Recordable):
+            return
+        episode = active.episode
+        try:
+            frames = active.env.stop_recording()
+        except Exception:
+            _logger.exception("could not fetch the recording of episode %s", episode.episode_id)
+            return
+        success = self._shared.scoring.succeeded(episode.episode_id)
+        try:
+            recorder.save(active.spec, episode.trial_index, success, frames)
+        except Exception:
+            _logger.exception("could not save the recording of episode %s", episode.episode_id)
 
     def _step_obs(self, active: _Active, action: RawAction) -> ProprioObs | FullObs:
         if action.include_cameras:
@@ -416,6 +451,7 @@ class Gateway:
         max_sessions: int = 1,
         on_clock_start: Callable[[], None] | None = None,
         on_finish: Callable[[], None] | None = None,
+        recorder: Recorder | None = None,
     ) -> None:
         if mode is EnforcementMode.OFFICIAL:
             leaky = sorted(t for t, s in tasks.items() if s.privileged)
@@ -445,6 +481,7 @@ class Gateway:
             timing=Timings(clock),
             clock=clock,
             in_flight=_InFlight(),
+            recorder=recorder,
         )
         self._max_sessions = max(1, max_sessions)
         self._sessions_lock = threading.Lock()

@@ -23,7 +23,7 @@ from typing import TYPE_CHECKING, Any, TypeVar
 
 import numpy as np
 
-from capx.gateway.low_level import SimAdapter, StepOutcome
+from capx.gateway.low_level import RECORDING_SIZE, SimAdapter, StepOutcome
 from capx.protocol.actions import R1ProRawAction, RawAction
 from capx.protocol.taskpack import TaskSpec
 
@@ -117,6 +117,10 @@ class R1ProLowLevelEnv(SimAdapter):
 
         def cycle() -> bool:
             self._base.step(command)
+            if self._recording is not None:
+                import omnigibson as og
+
+                self._capture_if_due(float(og.sim.current_time))
             return bool(self._base.task_completed())
 
         return StepOutcome(success=_on_sim_thread(cycle))
@@ -137,6 +141,15 @@ class R1ProLowLevelEnv(SimAdapter):
 
     def close(self) -> None:
         _on_sim_thread(self._base.close)
+
+    def _render_frame(self) -> np.ndarray:
+        from PIL import Image
+
+        sensor = self._base.env.external_sensors["external_camera"]
+        rgb = _to_numpy(sensor.get_obs()[0]["rgb"])[..., :3].astype(np.uint8)
+        image = Image.fromarray(rgb)
+        image.thumbnail((RECORDING_SIZE, RECORDING_SIZE))
+        return np.asarray(image)
 
     def _proprio_fields(self) -> dict[str, Any]:
         robot = self._base.robot

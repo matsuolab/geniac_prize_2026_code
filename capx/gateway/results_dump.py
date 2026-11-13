@@ -16,6 +16,7 @@ import logging
 import os
 import signal
 import threading
+from collections.abc import Callable
 from datetime import datetime, timezone
 from types import FrameType
 from typing import Protocol
@@ -146,9 +147,12 @@ def install_results_dump(
     visibility: Visibility,
     path: str,
     interval_s: float = 60.0,
+    *,
+    after_final: Callable[[], None] | None = None,
 ) -> ResultsDump:
     """Start a :class:`ResultsDump` and chain SIGTERM/SIGINT so the final dump happens
-    before the previously installed handler runs.
+    before the previously installed handler runs. ``after_final`` runs once the final
+    dump is written, before the signal is passed on.
 
     The handler only starts the final dump, on a thread of its own: ending the job and
     dumping take locks the interrupted main thread may hold (``Gateway.acquire()`` holds
@@ -161,6 +165,8 @@ def install_results_dump(
     def _dump_then_resend(signum: int) -> None:
         try:
             results.final()
+            if after_final is not None:
+                after_final()
         finally:
             dumped.set()
             os.kill(os.getpid(), signum)

@@ -43,7 +43,12 @@ def slot_name(job_name: str, slot: int) -> str:
 
 
 def submit_worker(
-    config: QueueConfig, repo_root: Path, config_path: str | None = None, slot: int = 0
+    config: QueueConfig,
+    repo_root: Path,
+    config_path: str | None = None,
+    slot: int = 0,
+    *,
+    recordings: bool = True,
 ) -> str:
     """sbatch the worker job for one slot and return its job id."""
     slurm = config.slurm
@@ -67,6 +72,8 @@ def submit_worker(
     command.extend(["--worker-id", name])
     if config_path:
         command.extend(["--config", config_path])
+    if not recordings:
+        command.append("--no-recordings")
 
     env = {key: os.environ[key] for key in WORKER_ENV if key in os.environ}
     result = subprocess.run(
@@ -100,6 +107,7 @@ def supervise(
     config_path: str | None = None,
     interval_s: float = 60.0,
     once: bool = False,
+    recordings: bool = True,
 ) -> None:
     """Keep ``slurm.workers`` worker jobs queued or running."""
     while True:
@@ -107,7 +115,7 @@ def supervise(
             try:
                 if find_worker_jobs(slot_name(config.slurm.job_name, slot)):
                     continue
-                submit_worker(config, repo_root, config_path, slot)
+                submit_worker(config, repo_root, config_path, slot, recordings=recordings)
             except SlurmError:
                 _logger.exception("worker slot %d: trying again next tick", slot)
         if once:

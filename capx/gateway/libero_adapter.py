@@ -17,7 +17,7 @@ import numpy as np
 import viser.transforms as vtf
 
 from capx.gateway.env_build import build_low_level_env
-from capx.gateway.low_level import FrankaSimAdapter
+from capx.gateway.low_level import FrankaSimAdapter, render_mujoco
 from capx.protocol.taskpack import TaskSpec
 
 if TYPE_CHECKING:
@@ -35,6 +35,9 @@ class LiberoLowLevelEnv(FrankaSimAdapter):
     @property
     def sim_time(self) -> float:
         return float(self._base.handle.env.sim.data.time)
+
+    def _render_frame(self) -> np.ndarray:
+        return render_mujoco(self._base.handle.env.sim, "agentview")
 
     def get_proprio(self) -> dict[str, Any]:
         base = self._base

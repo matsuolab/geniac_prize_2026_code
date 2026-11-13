@@ -17,7 +17,7 @@ from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
-from capx.gateway.low_level import SimAdapter, StepOutcome
+from capx.gateway.low_level import SimAdapter, StepOutcome, render_mujoco
 from capx.protocol.actions import BimanualFrankaRawAction, RawAction
 
 if TYPE_CHECKING:
@@ -37,6 +37,11 @@ class RobosuiteBimanualLowLevelEnv(SimAdapter):
     def sim_time(self) -> float:
         return float(self._base.robosuite_env.sim.data.time)
 
+    def _render_frame(self) -> np.ndarray:
+        # agentview shows both arms; only the handover env names its own camera.
+        camera = getattr(self._base, "save_camera_name", "agentview")
+        return render_mujoco(self._base.robosuite_env.sim, camera)
+
     def apply_raw_action(self, action: RawAction) -> StepOutcome:
         assert isinstance(action, BimanualFrankaRawAction)
         joints = np.asarray(action.joints, dtype=np.float64)
@@ -46,6 +51,8 @@ class RobosuiteBimanualLowLevelEnv(SimAdapter):
         self._base.move_to_joints_blocking_both(
             joints[0], joints[1], tolerance=0.0, max_steps=1
         )
+        if self._recording is not None:
+            self._capture_if_due(self.sim_time)
         return StepOutcome(success=bool(self._base.task_completed()))
 
     def get_proprio(self) -> dict[str, Any]:
