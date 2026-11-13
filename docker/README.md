@@ -81,10 +81,11 @@ bash docker/run.sh
 
 - `GPU_ARCH` は実際の GPU の世代に合わせてください（`nvidia-smi` で確認）。CUDA 拡張
   （sam3、contact_graspnet、curobo など）がその世代向けにビルドされます。
-- `run.sh` は空いている GPU を1枚選び（`GPUS=device=N` で指定もできます）、ホスト側の
-  ポートを空いているものに割り当てます（`LLM_PROXY_PORT`、`WEBUI_PORT` で指定もできます）。
+- `run.sh` は空いている GPU を1枚選び（`GPUS=device=N` で指定もできます）、Web UI の
+  ホスト側のポートを空いているものに割り当てます（`WEBUI_PORT` で指定もできます）。
   LLM のプロキシ（`capx/serving/openai_server.py` など）は、コンテナの中の Unix ソケット
-  （`CAPX_SOCKET_DIR`、既定は `~/.capx/sockets` の `model.sock`）だけで待ち受けます。
+  （`CAPX_SOCKET_DIR`、既定は `~/.capx/sockets` の `model.sock`）だけで待ち受けるので、
+  ホストには公開しません。
 - `docker/api_keys.yaml` と `hf_token` から API キーと HuggingFace のトークンを読みます。
 - `CAPX_HF_CACHE_DIR` で HuggingFace のキャッシュの場所を、`CAPX_SHARED_DATASET_DIR` で
   複数のユーザーが共有するデータセットのディレクトリを指定できます。

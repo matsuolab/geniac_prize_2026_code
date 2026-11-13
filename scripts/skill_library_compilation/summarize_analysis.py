@@ -7,7 +7,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 import tyro
-from openai import OpenAI
+
+from capx.utils.openai_client import openai_client
 
 # OpenRouter proxy runs locally — no API key needed for the proxy
 API_KEY = os.environ.get("OPENROUTER_API_KEY", "not-needed-for-local-proxy")
@@ -179,10 +180,7 @@ def group_by_task(experiments: list[ExperimentInfo]) -> dict[str, list[Experimen
 
 def call_llm(prompt: str) -> str:
     """Call the LLM via the local OpenRouter proxy."""
-    client = OpenAI(
-        base_url="http://127.0.0.1:8110/",
-        api_key=API_KEY,
-    )
+    client = openai_client("http+unix://model.sock/", API_KEY)
     completion = client.chat.completions.create(
         model="google/gemini-3.1-pro-preview",
         messages=[{"role": "user", "content": prompt}],

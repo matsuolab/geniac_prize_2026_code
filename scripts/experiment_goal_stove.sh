@@ -5,6 +5,7 @@
 set -e
 
 cd "$(git rev-parse --show-toplevel)"
+source scripts/sockets.sh
 
 echo "=== Experiment: turn_on_the_stove (libero_goal_swap task 7) ==="
 echo "Trials: 10, Workers: 1"
@@ -13,17 +14,16 @@ echo ""
 # ── 1. Server health check ──────────────────────────────────────────────────
 echo "=== Checking API servers ==="
 FAIL=false
-for port in 8110 8114 8115 8116; do
-    if [ "$port" = "8110" ]; then
-        endpoint="http://127.0.0.1:${port}/health"
+for sock in model.sock sam3.sock graspnet.sock pyroki.sock; do
+    if [ "$sock" = "model.sock" ]; then
+        path=/health
     else
-        endpoint="http://127.0.0.1:${port}/"
+        path=/
     fi
-    code=$(curl -sf -o /dev/null -w "%{http_code}" --connect-timeout 3 "$endpoint" 2>/dev/null || echo "000")
-    if [ "$code" != "000" ]; then
-        echo "  Port $port: UP (HTTP $code)"
+    if sock_up "$sock" "$path"; then
+        echo "  $sock: UP"
     else
-        echo "  Port $port: DOWN"
+        echo "  $sock: DOWN"
         FAIL=true
     fi
 done
@@ -132,17 +132,14 @@ env:
       '
 api_servers:
 - _target_: capx.serving.launch_pyroki_server.main
-  port: 8116
-  host: 127.0.0.1
+  socket: pyroki.sock
   robot: panda_description
   target_link: panda_hand
 - _target_: capx.serving.launch_contact_graspnet_server.main
-  port: 8115
-  host: 127.0.0.1
+  socket: graspnet.sock
 - _target_: capx.serving.launch_sam3_server.main
   device: cuda
-  port: 8114
-  host: 127.0.0.1
+  socket: sam3.sock
 record_video: true
 evolve_skill_library: false
 output_dir: ./outputs/experiment_goal_stove/run

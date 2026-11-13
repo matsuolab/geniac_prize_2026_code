@@ -136,8 +136,7 @@ class BatchLaunchArgs:
     """List of paths to the YAML configuration files to run sequentially."""
 
     # Overrides (mirrored from LaunchArgs to allow global overrides)
-    # server_url: str = "http://0.0.0.0:8009/v1/responses"  # local server for running codex models
-    server_url: str = "http://127.0.0.1:8110/chat/completions"  # local server 
+    server_url: str = "http+unix://model.sock/chat/completions"  # local server 
 
 
     models: list[str] = field(

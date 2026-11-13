@@ -3,6 +3,7 @@ reach them over ``http+unix://`` URLs (capx/utils/unix_http.py)."""
 
 from __future__ import annotations
 
+import re
 import shutil
 import socket
 import stat
@@ -15,6 +16,7 @@ from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
+import yaml
 from pydantic import ValidationError
 
 from capx.serving.api_servers import ApiServerSpec
@@ -167,6 +169,23 @@ def test_launch_servers_starts_each_server_on_its_socket() -> None:
     assert "--port" not in cmd and "--host" not in cmd
 
 
+_REPO = Path(__file__).resolve().parents[1]
+_CONFIGS = sorted((_REPO / "env_configs").rglob("*.yaml"))
+_LOCAL_TCP_URL = re.compile(r"https?://(127\.0\.0\.1|localhost|0\.0\.0\.0)\b")
+
+
+@pytest.mark.parametrize("path", _CONFIGS, ids=lambda p: str(p.relative_to(_REPO / "env_configs")))
+def test_every_config_reaches_its_servers_over_unix_sockets(path: Path) -> None:
+    text = path.read_text()
+    assert not _LOCAL_TCP_URL.search(text)
+    cfg = yaml.safe_load(text) or {}
+    for entry in cfg.get("api_servers") or []:
+        ApiServerSpec.model_validate(entry)
+    for key in ("server_url", "visual_differencing_model_server_url"):
+        if isinstance(cfg.get(key), str):
+            unix_http.check_server_url(cfg[key])
+
+
 def test_launch_servers_refuses_a_tcp_entry(tmp_path: Path) -> None:
     launch_servers = pytest.importorskip("capx.serving.launch_servers")
     config = tmp_path / "c.yaml"
@@ -191,6 +210,17 @@ def _echo_app():  # noqa: ANN202
     @app.get("/health")
     def health() -> dict:
         return {"status": "ok"}
+
+    @app.post("/chat/completions")
+    def chat(body: dict) -> dict:
+        message = {"role": "assistant", "content": f"hello from {body['model']}"}
+        return {
+            "id": "c",
+            "object": "chat.completion",
+            "created": 0,
+            "model": body["model"],
+            "choices": [{"index": 0, "finish_reason": "stop", "message": message}],
+        }
 
     return app
 
@@ -247,6 +277,21 @@ def test_the_client_refuses_tcp_before_connecting() -> None:
     client = pytest.importorskip("capx.utils.unix_http_client")
     with pytest.raises(ValueError, match="Unix sockets"):
         client.post("http://127.0.0.1:8114/segment", json={}, timeout=1)
+
+
+def test_the_openai_sdk_reaches_a_proxy_over_its_socket(echo_server: Path) -> None:
+    openai_client = pytest.importorskip("capx.utils.openai_client")
+    client = openai_client.openai_client("http+unix://echo.sock/", "unused")
+    reply = client.chat.completions.create(model="m", messages=[{"role": "user", "content": "hi"}])
+    assert reply.choices[0].message.content == "hello from m"
+
+
+def test_the_openai_sdk_keeps_https_and_refuses_tcp() -> None:
+    openai_client = pytest.importorskip("capx.utils.openai_client")
+    remote = openai_client.openai_client("https://openrouter.ai/api/v1/", "key")
+    assert str(remote.base_url) == "https://openrouter.ai/api/v1/"
+    with pytest.raises(ValueError, match="Unix sockets"):
+        openai_client.openai_client("http://127.0.0.1:8110/", "key")
 
 
 def test_the_sidecar_helper_posts_over_the_socket(echo_server: Path) -> None:

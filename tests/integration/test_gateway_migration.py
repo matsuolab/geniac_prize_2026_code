@@ -1,8 +1,8 @@
 """Real-backend smoke test for the gateway migration (design §12.2).
 
 Skipped entirely unless ``CAPX_IT=1`` — this needs a Robosuite/MuJoCo venv
-(``docker/run-robosuite-smoke.sh`` topology) plus live SAM3 (:8114),
-Contact-GraspNet (:8115), and PyRoKi (:8116) servers on ``127.0.0.1``. None of
+(``docker/run-robosuite-smoke.sh`` topology) plus live SAM3 (sam3.sock),
+Contact-GraspNet (graspnet.sock), and PyRoKi (pyroki.sock) servers. None of
 that is available in the sim-free unit-test venv, and this file must never
 import anything from ``capx.gateway.robosuite_adapter``,
 ``capx.integrations.franka.control``, or the perception/IK client packages at
@@ -28,7 +28,7 @@ import pytest
 pytestmark = pytest.mark.skipif(
     os.environ.get("CAPX_IT") != "1",
     reason="real-backend smoke test; set CAPX_IT=1 in a robosuite venv with "
-    "SAM3/GraspNet/PyRoKi servers running on 127.0.0.1:8114/8115/8116",
+    "SAM3/GraspNet/PyRoKi servers on their sockets in $CAPX_SOCKET_DIR",
 )
 
 TASKPACK = "taskpacks/original"

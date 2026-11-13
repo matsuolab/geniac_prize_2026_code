@@ -10,7 +10,7 @@ const FALLBACK_CONFIG = 'env_configs/cube_stack/franka_robosuite_cube_stack.yaml
 function App() {
   const trial = useTrialState();
   const [model, setModel] = useState('google/gemini-3.1-pro-preview');
-  const [serverUrl, setServerUrl] = useState('http://127.0.0.1:8110/chat/completions');
+  const [serverUrl, setServerUrl] = useState('http+unix://model.sock/chat/completions');
   const [temperature, setTemperature] = useState(1.0);
   const [awaitUserInput, setAwaitUserInput] = useState(true);
   const [executionTimeout, setExecutionTimeout] = useState(180);
