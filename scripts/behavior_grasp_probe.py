@@ -12,7 +12,7 @@ check_object_in_hand), with heavy instrumentation:
   FK-vs-wire cross-check) is logged to `events.jsonl`;
 - ego + wrist camera RGB frames are saved at each milestone.
 
-Run (host, .venv-gwtest, backend on 127.0.0.1:18102, SAM3 on sam3.sock, GraspNet on graspnet.sock):
+Run (host, .venv-gwtest, backend on behavior.sock, SAM3 on sam3.sock, GraspNet on graspnet.sock):
 
     PYTHONPATH=. JAX_PLATFORMS=cpu .venv-gwtest/bin/python \
         scripts/behavior_grasp_probe.py --out outputs/behavior_debug/probe_01
