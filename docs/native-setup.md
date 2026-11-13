@@ -122,6 +122,11 @@ uv run --no-sync --active capx/serving/launch_servers.py --profile default
 --profile minimal   # PyRoKi のみ（oracle／特権的な評価用）
 ```
 
+サーバーは TCP のポートを開かず、`CAPX_SOCKET_DIR`（既定は `~/.capx/sockets`）の中の Unix ソケット
+（`sam3.sock`、`graspnet.sock`、`pyroki.sock` など）だけで待ち受けます。このディレクトリは自分だけが
+入れる 0700 で作られ、他のユーザーが入れるディレクトリでは起動しません。`/tmp` の直下には置かず、
+`chmod 777` などで開けないでください（[README](../README.md#注意点)）。
+
 ### 2. LLM プロキシのセットアップ
 
 評価ハーネスは、OpenAI 互換の API を公開するローカルプロキシ経由で LLM に問い合わせます。
@@ -129,11 +134,11 @@ uv run --no-sync --active capx/serving/launch_servers.py --profile default
 ```bash
 # OpenRouter（openrouter.ai/keys でキーを取得）
 echo "sk-or-v1-your-key-here" > .openrouterkey
-uv run --no-sync --active capx/serving/openrouter_server.py --key-file .openrouterkey --port 8110
+uv run --no-sync --active capx/serving/openrouter_server.py --key-file .openrouterkey
 ```
 
-> **補足:** `.openrouterkey` は git の管理対象外です。設定のデフォルトのサーバー URL は
-> `http://127.0.0.1:8110/chat/completions` です。
+> **補足:** `.openrouterkey` は git の管理対象外です。プロキシは `model.sock` で待ち受け、設定の
+> デフォルトのサーバー URL は `http+unix://model.sock/chat/completions` です。
 
 その他のプロバイダのオプション（OpenRouter、vLLM、カスタム）については
 [configuration.md](configuration.md) を参照してください。
@@ -145,9 +150,9 @@ uv run --no-sync --active capx/serving/openrouter_server.py --key-file .openrout
 
 ```bash
 # 1. モデルを配信する（fp8、48GB の Ada/Hopper/Blackwell GPU 1枚に収まる。初回実行時に .venv-serve が構築される）
-bash docker/run-qwen-server.sh &            # :8110 で OpenAI 互換エンドポイントを公開
+bash docker/run-qwen-server.sh &            # model.sock で OpenAI 互換エンドポイントを公開
 
-# 2. （S3 系／*_reduced_api* 系の設定のみ）:8122 で Molmo のグラウンディングサーバーを起動
+# 2. （S3 系／*_reduced_api* 系の設定のみ）molmo.sock で Molmo のグラウンディングサーバーを起動
 bash docker/run-molmo-server.sh &
 
 # 3. ロールアウト／評価の実行（CONFIG, TRIALS, WORKERS, TEMP は環境変数で上書き可能）
@@ -163,8 +168,8 @@ bash docker/run-robosuite-qwen.sh
 - 最近の vLLM の wheel は CUDA-13 向けにビルドされています。ホストのドライバは **R580 以上**、
   torch は `cu130` 版（`--torch-backend=cu130`）である必要があります。そうでないと
   `libcudart.so.13` のインポートエラーになります。
-- vLLM のエンドポイントは `http://127.0.0.1:8110/v1/chat/completions` です ── プロキシとは
-  違い `/v1` が付く点に注意してください。
+- vLLM のエンドポイントは `http+unix://model.sock/v1/chat/completions` です ── プロキシとは
+  違い `/v1` が付く点に注意してください。vLLM は `--uds` で Unix ソケットだけで待ち受けます。
 - 複数ターンの設定には `--max-model-len ≥16384` が必要です（2ターン目のプロンプトにはコード
   とコンソール出力が含まれるためです）。
 - 生成が遅い場合: 応答が返り始めるまでの待ち時間は、リクエストごとに `CAPX_LLM_TIMEOUT` 秒です

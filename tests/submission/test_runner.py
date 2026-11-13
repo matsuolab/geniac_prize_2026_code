@@ -91,7 +91,7 @@ def _write_task_config(tmp_path: Path, name: str, **overrides: Any) -> str:
 def _submission_config(**overrides: Any) -> SubmissionConfig:
     base: dict[str, Any] = {
         "model": "test-model",
-        "server_url": "http://127.0.0.1:9/v1/chat/completions",
+        "server_url": "http+unix://model.sock/v1/chat/completions",
         "trials_per_task": 1,
         "output_dir": "outputs/test",
         "task_map": [],

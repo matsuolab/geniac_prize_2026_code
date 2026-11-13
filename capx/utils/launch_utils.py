@@ -82,9 +82,9 @@ def _load_config(args: LaunchArgs) -> tuple[Any, dict[str, Any], list]:
     # Merge server URLs and VDM model settings from YAML into args
     # (CLI args take priority; YAML fills in when CLI uses defaults)
     _CLI_DEFAULTS = {
-        "server_url": "http://127.0.0.1:8110/chat/completions",
+        "server_url": "http+unix://model.sock/chat/completions",
         "visual_differencing_model": "google/gemini-3.1-pro-preview",
-        "visual_differencing_model_server_url": "http://127.0.0.1:8110/chat/completions",
+        "visual_differencing_model_server_url": "http+unix://model.sock/chat/completions",
         "visual_differencing_model_api_key": None,
     }
     for field, cli_default in _CLI_DEFAULTS.items():

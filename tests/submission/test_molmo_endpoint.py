@@ -2,14 +2,14 @@
 
 When SAM3's language path finds nothing, ``molmo.py`` is what stands between the
 agent and "object not found". Its endpoint used to be a module constant pointing at
-a separate Molmo server on port 8122 — which does not exist inside an offline
+a separate Molmo server — which does not exist inside an offline
 submission container, so the fallback was absent rather than merely worse. One
 137-task run made 2933 refused requests across 115 tasks before returning
 ``(None, None, None)`` each time.
 
 The endpoint is configurable now so a container can point it at a vision-language
 model it is already serving. These tests pin that it really is configurable, and
-that an unset environment still behaves exactly as before.
+what an unset environment points at.
 """
 
 from __future__ import annotations
@@ -31,9 +31,9 @@ def _reload(monkeypatch: pytest.MonkeyPatch, **env: str):
     return importlib.import_module(MODULE)
 
 
-def test_the_endpoint_defaults_to_what_it_always_was(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_the_endpoint_defaults_to_the_molmo_socket(monkeypatch: pytest.MonkeyPatch) -> None:
     molmo = _reload(monkeypatch)
-    assert molmo.SERVICE_URL == "http://127.0.0.1:8122/v1"
+    assert molmo.SERVICE_URL == "http+unix://molmo.sock/v1"
     assert molmo.DEFAULT_MODEL == "allenai/Molmo2-8B"
 
 
@@ -42,10 +42,10 @@ def test_a_container_can_point_it_at_its_own_model_server(
 ) -> None:
     molmo = _reload(
         monkeypatch,
-        CAPX_MOLMO_URL="http://127.0.0.1:8110/v1",
+        CAPX_MOLMO_URL="http+unix://model.sock/v1",
         CAPX_MOLMO_MODEL="Qwen/Qwen3.6-27B",
     )
-    assert molmo.SERVICE_URL == "http://127.0.0.1:8110/v1"
+    assert molmo.SERVICE_URL == "http+unix://model.sock/v1"
     assert molmo.DEFAULT_MODEL == "Qwen/Qwen3.6-27B"
 
 
@@ -56,20 +56,20 @@ def test_init_molmo_takes_the_configured_endpoint_without_being_told(
     only thing that can carry a redirect."""
     molmo = _reload(
         monkeypatch,
-        CAPX_MOLMO_URL="http://127.0.0.1:8110/v1",
+        CAPX_MOLMO_URL="http+unix://model.sock/v1",
         CAPX_MOLMO_MODEL="Qwen/Qwen3.6-27B",
     )
     import inspect
 
     defaults = inspect.signature(molmo.init_molmo).parameters
-    assert defaults["base_url"].default == "http://127.0.0.1:8110/v1"
+    assert defaults["base_url"].default == "http+unix://model.sock/v1"
     assert defaults["model_name"].default == "Qwen/Qwen3.6-27B"
 
 
 def test_a_request_goes_to_the_configured_chat_endpoint(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    molmo = _reload(monkeypatch, CAPX_MOLMO_URL="http://127.0.0.1:8110/v1")
+    molmo = _reload(monkeypatch, CAPX_MOLMO_URL="http+unix://model.sock/v1")
     seen: dict[str, object] = {}
 
     class FakeSession:
@@ -87,13 +87,19 @@ def test_a_request_goes_to_the_configured_chat_endpoint(
 
             return Response()
 
-    monkeypatch.setattr(molmo.requests, "Session", lambda: FakeSession())
+    monkeypatch.setattr(molmo.unix_http_client, "new_session", lambda: FakeSession())
     from PIL import Image
 
     detect = molmo.init_molmo()
     detect(Image.new("RGB", (8, 8)), objects=["hammer"])
 
-    assert seen["url"] == "http://127.0.0.1:8110/v1/chat/completions"
+    assert seen["url"] == "http+unix://model.sock/v1/chat/completions"
+
+
+def test_a_tcp_endpoint_is_refused(monkeypatch: pytest.MonkeyPatch) -> None:
+    molmo = _reload(monkeypatch, CAPX_MOLMO_URL="http://127.0.0.1:8122/v1")
+    with pytest.raises(ValueError, match="Unix sockets"):
+        molmo.init_molmo()
 
 
 # --- reading the reply -------------------------------------------------------

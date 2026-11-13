@@ -21,6 +21,7 @@ from capx.envs.trial import (
     _build_log_lines,
     _run_single_trial,
 )
+from capx.serving.api_servers import ApiServerSpec
 from capx.utils.launch_utils import (
     TrialSummary,
     _print_and_save_summary,
@@ -28,6 +29,7 @@ from capx.utils.launch_utils import (
     run_server_proc,
 )
 from capx.utils.parallel_eval import run_parallel_with_setup
+from capx.utils.unix_http import is_listening, resolve_socket
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -47,42 +49,40 @@ DEADLINE_REPEAT_SECONDS = 1.0
 def _start_api_servers(
     api_servers: list | None, wait_timeout: float = 120.0
 ) -> list:
-    """Launch any API server sub-processes defined in the config.
+    """Launch the API server sub-processes defined in the config.
 
-    Skips servers whose port is already in use (e.g. started externally).
+    Skips servers whose socket already has a listener (e.g. started externally).
     After launching, waits until all servers are accepting connections.
     """
-    import socket
     import time
 
+    raw_specs = list(api_servers or [])
+    specs = [ApiServerSpec.model_validate(raw) for raw in raw_specs]
     procs = []
-    ports_to_wait: list[tuple[str, int]] = []
+    to_wait: list[tuple[Path, Any]] = []
     try:
-        for api_server in api_servers or []:
-            port = api_server.get("port")
-            host = api_server.get("host", "127.0.0.1")
-            if port is not None:
-                with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-                    if s.connect_ex((host, int(port))) == 0:
-                        print(f"API server on {host}:{port} already running, skipping")
-                        continue
-            proc = run_server_proc(api_server)
+        for raw, spec in zip(raw_specs, specs, strict=True):
+            path = resolve_socket(spec.socket)
+            if is_listening(path):
+                print(f"API server on {path} already running, skipping")
+                continue
+            proc = run_server_proc(raw)
             procs.append(proc)
-            print(f"API server {api_server} started")
-            if port is not None:
-                ports_to_wait.append((host, int(port)))
+            print(f"API server {raw} started")
+            to_wait.append((path, proc))
 
-        # Wait for all launched servers to accept connections
         deadline = time.time() + wait_timeout
-        for host, port in ports_to_wait:
+        for path, proc in to_wait:
             while time.time() < deadline:
-                with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-                    if s.connect_ex((host, port)) == 0:
-                        print(f"API server on {host}:{port} is ready")
-                        break
+                if is_listening(path):
+                    print(f"API server on {path} is ready")
+                    break
+                if not proc.is_alive():
+                    print(f"WARNING: API server for {path} exited before it was ready")
+                    break
                 time.sleep(1.0)
             else:
-                print(f"WARNING: API server on {host}:{port} not ready after {wait_timeout}s")
+                print(f"WARNING: API server on {path} not ready after {wait_timeout}s")
     except BaseException:
         # The caller only gets the processes back on success, so a failed or
         # interrupted startup has to stop the ones it already launched.

@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
-# Persistent Molmo VLM server for cap-x perception (port 8122).
+# Persistent Molmo VLM server for cap-x perception.
 #
 # capx/integrations/vision/molmo.py expects a vLLM-served OpenAI-compatible
-# endpoint at http://127.0.0.1:8122/v1/chat/completions with model name
+# endpoint on the Unix socket ${CAPX_SOCKET_DIR:-~/.capx/sockets}/molmo.sock
+# (CAPX_MOLMO_URL=http+unix://molmo.sock/v1) with model name
 # "allenai/Molmo2-8B" (the molmo client sends `model:` matching that string,
 # so vLLM's --served-model-name must match).
 #
@@ -23,7 +24,6 @@ set -euo pipefail
 
 CAPX_DIR="${CAPX_DIR:-/workspace/cap-x}"
 MOLMO_MODEL="${MOLMO_MODEL:-allenai/Molmo2-8B}"
-PORT="${PORT:-8122}"
 GPU_UTIL="${GPU_UTIL:-0.35}"
 MAX_MODEL_LEN="${MAX_MODEL_LEN:-8192}"
 
@@ -48,12 +48,20 @@ else
     source .venv-vllm/bin/activate
 fi
 
+SOCKET_DIR="${CAPX_SOCKET_DIR:-${HOME}/.capx/sockets}"
+mkdir -p -m 700 "${SOCKET_DIR}"
+if [[ ! -O "${SOCKET_DIR}" ]] || (( 0$(stat -c %a "${SOCKET_DIR}") & 077 )); then
+    echo "ERROR: ${SOCKET_DIR} must be owned by you with mode 700 (chmod 700 it)" >&2
+    exit 1
+fi
+SOCKET="${SOCKET_DIR}/molmo.sock"
+
 mkdir -p outputs/_molmo_logs
 LOG="outputs/_molmo_logs/molmo_vllm.log"
 
 echo "[molmo] starting vLLM"
 echo "        model=${MOLMO_MODEL}"
-echo "        port=${PORT}"
+echo "        socket=${SOCKET}"
 echo "        gpu_memory_utilization=${GPU_UTIL}"
 echo "        max_model_len=${MAX_MODEL_LEN}"
 echo "        log -> ${LOG}"
@@ -62,11 +70,13 @@ echo "        client expects served-model-name=${MOLMO_MODEL}"
 # trust-remote-code: Molmo ships custom modeling code on the HF Hub.
 # served-model-name fixed to MOLMO_MODEL so molmo.py's `model:` field matches.
 # HF_HUB_ENABLE_HF_TRANSFER=1 speeds up the first weight pull.
+# vLLM binds the socket itself and fails on a file a dead server left behind.
+[[ -S "${SOCKET}" ]] && rm -f "${SOCKET}"
+umask 077
 HF_HUB_ENABLE_HF_TRANSFER=1 exec python -m vllm.entrypoints.openai.api_server \
     --model "${MOLMO_MODEL}" \
     --served-model-name "${MOLMO_MODEL}" \
-    --host 0.0.0.0 \
-    --port "${PORT}" \
+    --uds "${SOCKET}" \
     --dtype bfloat16 \
     --gpu-memory-utilization "${GPU_UTIL}" \
     --max-model-len "${MAX_MODEL_LEN}" \

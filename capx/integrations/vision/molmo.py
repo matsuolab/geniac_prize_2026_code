@@ -10,8 +10,9 @@ from typing import Any
 
 import matplotlib.pyplot as plt
 import PIL
-import requests
 from PIL import Image
+
+from capx.utils import unix_http, unix_http_client
 
 _PROC: Any | None = None  # kept for backward compatibility; unused with vLLM HTTP API
 _MODEL: Any | None = None  # kept for backward compatibility; unused with vLLM HTTP API
@@ -25,7 +26,7 @@ _MODEL: Any | None = None  # kept for backward compatibility; unused with vLLM H
 # there — measured, 2933 refused requests across 115 of 137 tasks in one run.
 # Pointing it at a vision-language model the container is already serving costs
 # nothing and gives the fallback back.
-SERVICE_URL = os.environ.get("CAPX_MOLMO_URL", "http://127.0.0.1:8122/v1")
+SERVICE_URL = os.environ.get("CAPX_MOLMO_URL", "http+unix://molmo.sock/v1")
 DEFAULT_MODEL = os.environ.get("CAPX_MOLMO_MODEL", "allenai/Molmo2-8B")
 
 
@@ -232,7 +233,8 @@ def init_molmo(
     """
     # chat_url = f"{base_url.rstrip('/')}/v1/chat/completions" # SGLANG 
     chat_url = f"{base_url.rstrip('/')}/chat/completions" # vLLM
-    session = requests.Session()
+    unix_http.check_server_url(chat_url)
+    session = unix_http_client.new_session()
     headers = {"Content-Type": "application/json"}
     if api_key:
         headers["Authorization"] = f"Bearer {api_key}"

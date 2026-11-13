@@ -8,7 +8,10 @@ name the server does not serve, hung every lane until the queue killed the job.
 from __future__ import annotations
 
 import json
-from collections.abc import Callable, Iterable
+import shutil
+import tempfile
+from collections.abc import Callable, Iterable, Iterator
+from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
@@ -16,6 +19,7 @@ import pytest
 import requests
 
 from capx.llm import client as llm_client
+from capx.utils.unix_http import unix_url
 
 _OK_BODY = json.dumps({"choices": [{"message": {"content": "ok"}}], "usage": {}}).encode()
 
@@ -65,10 +69,18 @@ class _Response:
         pass
 
 
+@pytest.fixture
+def short_tmp() -> Iterator[Path]:
+    """A directory short enough for a Unix socket path, which pytest's tmp_path may not be."""
+    path = Path(tempfile.mkdtemp(prefix="capx"))
+    yield path
+    shutil.rmtree(path, ignore_errors=True)
+
+
 def _args() -> SimpleNamespace:
     return SimpleNamespace(
         model="Qwen/Qwen3.6-27B",
-        server_url="http://127.0.0.1:8110/v1/chat/completions",
+        server_url="http+unix://model.sock/v1/chat/completions",
         api_key=None,
         temperature=0.0,
         max_tokens=64,
@@ -89,7 +101,7 @@ def _serve(monkeypatch: pytest.MonkeyPatch, *replies: Any) -> list[dict[str, Any
             raise reply
         return _Response(reply)
 
-    monkeypatch.setattr(llm_client.requests, "post", post)
+    monkeypatch.setattr(llm_client.unix_http_client, "post", post)
     monkeypatch.setattr(llm_client.time, "sleep", lambda s: None)
     return sent
 
@@ -144,12 +156,20 @@ def test_the_server_url_is_used_for_every_model(monkeypatch: pytest.MonkeyPatch)
         urls.append(url)
         return _Response(200)
 
-    monkeypatch.setattr(llm_client.requests, "post", post)
+    monkeypatch.setattr(llm_client.unix_http_client, "post", post)
     args = _args()
     args.model = "openrouter/qwen/qwen3-235b-a22b"
-    args.server_url = "http://127.0.0.1:9999/chat/completions"
+    args.server_url = "http+unix://other.sock/chat/completions"
     llm_client.query_model(args, [{"role": "user", "content": "hi"}])
-    assert urls == ["http://127.0.0.1:9999/chat/completions"]
+    assert urls == ["http+unix://other.sock/chat/completions"]
+
+
+def test_a_tcp_server_url_is_refused_without_a_retry(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(llm_client.time, "sleep", lambda s: pytest.fail("retried"))
+    args = _args()
+    args.server_url = "http://127.0.0.1:8110/v1/chat/completions"
+    with pytest.raises(ValueError, match="Unix sockets"):
+        llm_client.query_model(args, [{"role": "user", "content": "hi"}])
 
 
 def test_streaming_reads_vllms_reasoning_and_falls_back_to_it(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -163,7 +183,7 @@ def test_streaming_reads_vllms_reasoning_and_falls_back_to_it(monkeypatch: pytes
     # Split mid-line, as a network read can.
     chunks = [stream[:30], stream[30:90], stream[90:]]
     monkeypatch.setattr(
-        llm_client.requests,
+        llm_client.unix_http_client,
         "post",
         lambda url, **kw: _Response(200, chunks, content_type="text/event-stream"),
     )
@@ -274,7 +294,7 @@ def _trickle(monkeypatch: pytest.MonkeyPatch, *, content_type: str) -> tuple[lis
         content_type=content_type,
         on_read=lambda: clock.__setitem__(0, clock[0] + 30.0),
     )
-    monkeypatch.setattr(llm_client.requests, "post", lambda url, **kw: response)
+    monkeypatch.setattr(llm_client.unix_http_client, "post", lambda url, **kw: response)
     return clock, response
 
 
@@ -331,7 +351,7 @@ def test_a_connection_lost_mid_body_is_retried(monkeypatch: pytest.MonkeyPatch) 
 
     replies = iter([_Response(200, on_read=broken), _Response(200)])
     sent: list[dict[str, Any]] = []
-    monkeypatch.setattr(llm_client.requests, "post", lambda url, **kw: sent.append(kw) or next(replies))
+    monkeypatch.setattr(llm_client.unix_http_client, "post", lambda url, **kw: sent.append(kw) or next(replies))
     monkeypatch.setattr(llm_client.time, "sleep", lambda s: None)
     assert llm_client.query_model(_args(), [{"role": "user", "content": "hi"}])["content"] == "ok"
     assert len(sent) == 2
@@ -351,7 +371,7 @@ _CHUNKED_HEADERS = b"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nTransf
     ids=["headers", "chunk-framing"],
 )
 def test_a_trickling_server_is_cut_off_at_the_deadline(
-    monkeypatch: pytest.MonkeyPatch, at_once: bytes, trickled: bytes
+    monkeypatch: pytest.MonkeyPatch, short_tmp: Path, at_once: bytes, trickled: bytes
 ) -> None:
     """requests' timeout bounds each wait on the socket, so a server sending a byte
     every 50 ms held the request past any deadline."""
@@ -359,8 +379,8 @@ def test_a_trickling_server_is_cut_off_at_the_deadline(
     import threading
     import time
 
-    listener = socket.socket()
-    listener.bind(("127.0.0.1", 0))
+    listener = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    listener.bind(str(short_tmp / "model.sock"))
     listener.listen()
     stop = threading.Event()
 
@@ -378,7 +398,7 @@ def test_a_trickling_server_is_cut_off_at_the_deadline(
     threading.Thread(target=trickle, daemon=True).start()
     monkeypatch.setenv("CAPX_LLM_RETRY_DEADLINE_S", "1")
     args = _args()
-    args.server_url = f"http://127.0.0.1:{listener.getsockname()[1]}/v1/chat/completions"
+    args.server_url = unix_url(short_tmp / "model.sock", "/v1/chat/completions")
     started = time.monotonic()
     try:
         with pytest.raises(requests.Timeout):

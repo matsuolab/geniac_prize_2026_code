@@ -281,7 +281,7 @@ def _server_specs(task_cfg: TaskRunConfig) -> list[dict[str, Any]]:
 
 
 class _ApiServers:
-    """The perception/IK servers, started once per config; they listen on fixed ports
+    """The perception/IK servers, started once per config; they listen on fixed sockets
     shared by every lane, so two lanes must not start them at once."""
 
     def __init__(self) -> None:

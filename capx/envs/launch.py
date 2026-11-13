@@ -45,7 +45,7 @@ class LaunchArgs:
     """Path to the YAML configuration file defining the environment and task."""
 
     # Model server configuration
-    server_url: str = "http://127.0.0.1:8110/chat/completions"
+    server_url: str = "http+unix://model.sock/chat/completions"
     """URL of the vLLM server's chat completions endpoint."""
 
     model: str = "google/gemini-3.1-pro-preview"
@@ -83,7 +83,7 @@ class LaunchArgs:
     """Model to use for visual differencing."""
 
     visual_differencing_model_server_url: str | None = (
-        "http://127.0.0.1:8110/chat/completions"
+        "http+unix://model.sock/chat/completions"
     )
     """Server URL of the image differencing model."""
 

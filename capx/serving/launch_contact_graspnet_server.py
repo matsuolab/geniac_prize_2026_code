@@ -13,11 +13,11 @@ from typing import Any, List, Tuple
 import numpy as np
 import torch
 import tyro
-import uvicorn
 import viser.transforms as vtf
 import yaml
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
+from capx.utils.unix_http import serve_app
 from capx.utils.graspnet_utils import camera_so3_looking_at_origin, sample_hemisphere_viewpoint, sample_random_camera_viewpoint, sample_hemisphere_viewpoints_evenly
 
 from capx.utils.graspnet_utils import (
@@ -507,7 +507,7 @@ async def plan_evenly_endpoint(req: PlanEvenlyRequest):
         )
 
 
-def main(device: str = "cuda", port: int = 8115, host: str = "127.0.0.1"):
+def main(device: str = "cuda", socket: str = "graspnet.sock"):
     global _GRASP_ESTIMATOR, _DEVICE
     _DEVICE = device
 
@@ -551,7 +551,7 @@ def main(device: str = "cuda", port: int = 8115, host: str = "127.0.0.1"):
         logger.error(f"Error loading checkpoint: {e}")
 
     logger.info(f"GraspNet Service initialized on {device}. Starting Uvicorn...")
-    uvicorn.run(app, host=host, port=port)
+    serve_app(app, socket)
 
 
 if __name__ == "__main__":

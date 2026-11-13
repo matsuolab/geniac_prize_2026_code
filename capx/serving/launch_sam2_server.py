@@ -7,11 +7,12 @@ from typing import Any, List, Optional, Tuple
 import numpy as np
 import torch
 import tyro
-import uvicorn
 from fastapi import FastAPI, HTTPException
 from PIL import Image
 from pydantic import BaseModel
 from transformers import Sam2Model, Sam2Processor, pipeline
+
+from capx.utils.unix_http import serve_app
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -375,8 +376,7 @@ async def segment_point(req: PointPromptRequest):
 def main(
     model_name: str = "facebook/sam2.1-hiera-large",
     device: str = "cuda",
-    port: int = 8113,
-    host: str = "127.0.0.1",
+    socket: str = "sam2.sock",
 ):
     global _GENERATOR, _PROCESSOR, _MODEL, _POINTS_PER_BATCH, _DEVICE
 
@@ -402,7 +402,7 @@ def main(
         _MODEL = _MODEL.to(device_arg)
 
     logger.info("Model loaded. Starting Server...")
-    uvicorn.run(app, host=host, port=port)
+    serve_app(app, socket)
 
 
 if __name__ == "__main__":

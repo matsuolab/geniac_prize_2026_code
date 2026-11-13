@@ -5,6 +5,8 @@ Start all API servers needed for an environment config with one command:
     uv run --no-sync --active capx/serving/launch_servers.py \
         --config-path env_configs/cube_stack/franka_robosuite_cube_stack.yaml
 
+Each server listens on a Unix socket in $CAPX_SOCKET_DIR (default ~/.capx/sockets).
+
 Or start a predefined server profile:
 
     uv run --no-sync --active capx/serving/launch_servers.py --profile default
@@ -17,7 +19,6 @@ import json
 import logging
 import os
 import signal
-import socket
 import subprocess
 import sys
 import time
@@ -27,6 +28,9 @@ from typing import Any
 
 import tyro
 import yaml
+
+from capx.serving.api_servers import ApiServerSpec
+from capx.utils.unix_http import is_listening, resolve_socket
 
 # ---------------------------------------------------------------------------
 # Logging
@@ -49,42 +53,42 @@ logger = logging.getLogger("launch_servers")
 SERVER_REGISTRY: dict[str, dict[str, Any]] = {
     "sam3": {
         "target": "capx.serving.launch_sam3_server",
-        "default_port": 8114,
+        "default_socket": "sam3.sock",
         "gpu_required": True,
         "gpu_memory_mb": 3000,
         "extra_args": {"device": "cuda"},
     },
     "graspnet": {
         "target": "capx.serving.launch_contact_graspnet_server",
-        "default_port": 8115,
+        "default_socket": "graspnet.sock",
         "gpu_required": True,
         "gpu_memory_mb": 2000,
         "extra_args": {"device": "cuda"},
     },
     "pyroki": {
         "target": "capx.serving.launch_pyroki_server",
-        "default_port": 8116,
+        "default_socket": "pyroki.sock",
         "gpu_required": False,
         "gpu_memory_mb": 0,
         "extra_args": {},
     },
     "sam2": {
         "target": "capx.serving.launch_sam2_server",
-        "default_port": 8113,
+        "default_socket": "sam2.sock",
         "gpu_required": True,
         "gpu_memory_mb": 6000,
         "extra_args": {"device": "cuda"},
     },
     "owlvit": {
         "target": "capx.serving.launch_owlvit_server",
-        "default_port": 8118,
+        "default_socket": "owlvit.sock",
         "gpu_required": True,
         "gpu_memory_mb": 3000,
         "extra_args": {"device": "cuda"},
     },
     "curobo": {
         "target": "capx.serving.launch_curobo_server",
-        "default_port": 8117,
+        "default_socket": "curobo.sock",
         "gpu_required": True,
         "gpu_memory_mb": 2000,
         "extra_args": {},
@@ -102,19 +106,19 @@ _TARGET_TO_NAME: dict[str, str] = {
 
 PROFILES: dict[str, list[dict[str, Any]]] = {
     "default": [
-        {"server": "sam3", "port": 8114},
-        {"server": "graspnet", "port": 8115},
-        {"server": "pyroki", "port": 8116},
+        {"server": "sam3"},
+        {"server": "graspnet"},
+        {"server": "pyroki"},
     ],
     "full": [
-        {"server": "sam3", "port": 8114},
-        {"server": "graspnet", "port": 8115},
-        {"server": "pyroki", "port": 8116},
-        {"server": "owlvit", "port": 8117},
-        {"server": "sam2", "port": 8113},
+        {"server": "sam3"},
+        {"server": "graspnet"},
+        {"server": "pyroki"},
+        {"server": "owlvit"},
+        {"server": "sam2"},
     ],
     "minimal": [
-        {"server": "pyroki", "port": 8116},
+        {"server": "pyroki"},
     ],
 }
 
@@ -236,8 +240,7 @@ def parse_servers_from_yaml(config_path: str) -> list[dict[str, Any]]:
         api_servers:
           - _target_: capx.serving.launch_sam3_server.main
             device: cuda
-            port: 8114
-            host: 127.0.0.1
+            socket: sam3.sock
 
     This function maps each ``_target_`` to the corresponding short name in
     :data:`SERVER_REGISTRY` and collects any extra keyword arguments from the
@@ -256,7 +259,7 @@ def parse_servers_from_yaml(config_path: str) -> list[dict[str, Any]]:
 
     servers: list[dict[str, Any]] = []
     for entry in api_servers_raw:
-        target = entry.get("_target_", "")
+        target = ApiServerSpec.model_validate(entry).target
         # Strip trailing ".main" to get the module path
         module = target.removesuffix(".main")
         name = _TARGET_TO_NAME.get(module)
@@ -269,15 +272,11 @@ def parse_servers_from_yaml(config_path: str) -> list[dict[str, Any]]:
             )
             continue
 
-        srv: dict[str, Any] = {
-            "server": name,
-            "port": entry.get("port", SERVER_REGISTRY[name]["default_port"]),
-            "host": entry.get("host", "127.0.0.1"),
-        }
+        srv: dict[str, Any] = {"server": name, "socket": entry["socket"]}
 
         # Carry over extra args from the YAML (e.g. device, robot, target_link)
         extra: dict[str, Any] = {}
-        skip_keys = {"_target_", "port", "host"}
+        skip_keys = {"_target_", "socket"}
         for k, v in entry.items():
             if k not in skip_keys:
                 extra[k] = v
@@ -303,17 +302,12 @@ def _build_cmd(server_config: dict[str, Any], workers: int) -> list[str]:
     reg = SERVER_REGISTRY[name]
     module = reg["target"]
 
-    port = server_config.get("port", reg["default_port"])
-    host = server_config.get("host", "127.0.0.1")
-
     cmd = [
         sys.executable,
         "-m",
         module,
-        "--port",
-        str(port),
-        "--host",
-        host,
+        "--socket",
+        _socket_of(server_config),
     ]
 
     # Merge extra args: registry defaults overridden by YAML/config values
@@ -367,8 +361,7 @@ def start_server(
     if log_dir is not None:
         log_path = Path(log_dir)
         log_path.mkdir(parents=True, exist_ok=True)
-        port = server_config.get("port", SERVER_REGISTRY[name]["default_port"])
-        log_file = log_path / f"{name}_{port}.log"
+        log_file = log_path / f"{name}.log"
         log_file_handle = open(log_file, "w")  # noqa: SIM115
         stdout_target = log_file_handle
         stderr_target = subprocess.STDOUT
@@ -396,7 +389,7 @@ def wait_for_ready(
     processes: list[tuple[dict[str, Any], subprocess.Popen[str]]],
     timeout: float = 120.0,
 ) -> bool:
-    """Wait for all servers to accept TCP connections.
+    """Wait for all servers to accept connections on their Unix sockets.
 
     Uses exponential backoff per server. Returns ``True`` if all servers
     became ready within *timeout* seconds.
@@ -404,14 +397,12 @@ def wait_for_ready(
     deadline = time.monotonic() + timeout
     pending: dict[str, dict[str, Any]] = {}
     for srv in servers:
-        key = f"{srv['server']}:{srv.get('port', SERVER_REGISTRY[srv['server']]['default_port'])}"
-        pending[key] = srv
+        pending[_socket_of(srv)] = srv
 
     # Map server keys to their process for early failure detection
     proc_map: dict[str, subprocess.Popen[str]] = {}
     for srv, proc in processes:
-        key = f"{srv['server']}:{srv.get('port', SERVER_REGISTRY[srv['server']]['default_port'])}"
-        proc_map[key] = proc
+        proc_map[_socket_of(srv)] = proc
 
     interval = 1.0
     max_interval = 5.0
@@ -423,18 +414,16 @@ def wait_for_ready(
             proc = proc_map.get(key)
             if proc is not None and proc.poll() is not None:
                 logger.error(
-                    "  [FAILED] %s (port %s) - process exited with code %d",
+                    "  [FAILED] %s (%s) - process exited with code %d",
                     srv["server"],
-                    srv.get("port"),
+                    key,
                     proc.returncode,
                 )
                 # Don't keep waiting for a dead process
                 continue
 
-            host = srv.get("host", "127.0.0.1")
-            port = srv.get("port", SERVER_REGISTRY[srv["server"]]["default_port"])
-            if _tcp_check(host, port):
-                logger.info("  [READY]  %s (port %s)", srv["server"], port)
+            if is_listening(resolve_socket(key)):
+                logger.info("  [READY]  %s (%s)", srv["server"], key)
             else:
                 still_pending[key] = srv
         pending = still_pending
@@ -443,24 +432,19 @@ def wait_for_ready(
             interval = min(interval * 1.5, max_interval)
 
     if pending:
-        for _key, srv in pending.items():
+        for key, srv in pending.items():
             logger.warning(
-                "  [TIMEOUT] %s (port %s) did not become ready in %.0fs",
+                "  [TIMEOUT] %s (%s) did not become ready in %.0fs",
                 srv["server"],
-                srv.get("port"),
+                key,
                 timeout,
             )
         return False
     return True
 
 
-def _tcp_check(host: str, port: int, timeout: float = 1.0) -> bool:
-    """Return ``True`` if a TCP connection to *host*:*port* succeeds."""
-    try:
-        with socket.create_connection((host, port), timeout=timeout):
-            return True
-    except (OSError, ConnectionRefusedError, TimeoutError):
-        return False
+def _socket_of(server_config: dict[str, Any]) -> str:
+    return server_config.get("socket", SERVER_REGISTRY[server_config["server"]]["default_socket"])
 
 
 # ---------------------------------------------------------------------------
@@ -477,19 +461,19 @@ _STATUS_SYMBOLS = {
 
 def print_allocation_table(servers: list[dict[str, Any]]) -> None:
     """Print a summary table of the planned server allocation."""
-    header = f"{'Server':<12} {'Port':<7} {'GPU':<6} {'VRAM (MB)':<10}"
+    header = f"{'Server':<12} {'Socket':<16} {'GPU':<6} {'VRAM (MB)':<10}"
     sep = "-" * len(header)
     logger.info("Server allocation plan:")
     logger.info("  %s", header)
     logger.info("  %s", sep)
     for srv in servers:
         name = srv["server"]
-        port = srv.get("port", SERVER_REGISTRY[name]["default_port"])
+        sock = _socket_of(srv)
         gpu = srv.get("gpu_index")
         gpu_str = str(gpu) if gpu is not None else "CPU"
         vram = SERVER_REGISTRY[name]["gpu_memory_mb"]
         vram_str = str(vram) if vram > 0 else "-"
-        logger.info("  %-12s %-7s %-6s %-10s", name, port, gpu_str, vram_str)
+        logger.info("  %-12s %-16s %-6s %-10s", name, sock, gpu_str, vram_str)
     logger.info("  %s", sep)
 
 
@@ -497,14 +481,14 @@ def print_status_table(
     processes: list[tuple[dict[str, Any], subprocess.Popen[str]]],
 ) -> None:
     """Print the final status of all server processes."""
-    header = f"{'Server':<12} {'Port':<7} {'PID':<8} {'Status':<10}"
+    header = f"{'Server':<12} {'Socket':<16} {'PID':<8} {'Status':<10}"
     sep = "-" * len(header)
     logger.info("Final server status:")
     logger.info("  %s", header)
     logger.info("  %s", sep)
     for srv, proc in processes:
         name = srv["server"]
-        port = srv.get("port", SERVER_REGISTRY[name]["default_port"])
+        sock = _socket_of(srv)
         pid = proc.pid
         rc = proc.poll()
         if rc is None:
@@ -513,7 +497,7 @@ def print_status_table(
             status = "stopped"
         else:
             status = f"exit({rc})"
-        logger.info("  %-12s %-7s %-8s %-10s", name, port, pid, status)
+        logger.info("  %-12s %-16s %-8s %-10s", name, sock, pid, status)
     logger.info("  %s", sep)
 
 
@@ -543,9 +527,6 @@ class LaunchServersArgs:
 
     timeout: float = 120.0
     """Seconds to wait for all servers to become ready."""
-
-    host: str = "127.0.0.1"
-    """Default host for servers (overridden by YAML/profile values)."""
 
     dry_run: bool = False
     """Print the allocation plan and exit without starting servers."""
@@ -581,10 +562,6 @@ def _resolve_servers(args: LaunchServersArgs) -> list[dict[str, Any]]:
     else:
         logger.info("No --config-path or --profile specified; using 'default' profile")
         servers = [dict(s) for s in PROFILES["default"]]
-
-    # Apply default host if not set
-    for srv in servers:
-        srv.setdefault("host", args.host)
 
     return servers
 
@@ -669,7 +646,7 @@ def main(args: LaunchServersArgs) -> None:
     # 5. Start all servers
     processes: list[tuple[dict[str, Any], subprocess.Popen[str]]] = []
     for srv in servers:
-        logger.info("Starting %s on port %s...", srv["server"], srv.get("port"))
+        logger.info("Starting %s on %s...", srv["server"], _socket_of(srv))
         try:
             proc = start_server(srv, workers=args.workers, log_dir=args.log_dir)
             processes.append((srv, proc))

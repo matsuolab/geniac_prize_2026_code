@@ -46,9 +46,9 @@ def test_r1pro_knobs_reject_unknown_keys():
 @pytest.mark.parametrize(
     "model",
     [
-        lambda: SubmissionConfig(model="m", server_url="u", concurency=16),
+        lambda: SubmissionConfig(model="m", server_url="http+unix://model.sock/v1/chat/completions", concurency=16),
         lambda: TaskRunConfig(apis=["SomeApi"], prompt="p", record_vidoe=False),
-        lambda: SubmissionConfig(model="m", server_url="u", task_map=[{"task_id": "t", "cfg": "x"}]),
+        lambda: SubmissionConfig(model="m", server_url="http+unix://model.sock/v1/chat/completions", task_map=[{"task_id": "t", "cfg": "x"}]),
     ],
 )
 def test_a_misspelt_key_is_an_error_not_a_default(model):
@@ -63,7 +63,7 @@ def test_task_map_configs_are_relative_to_the_runner_config(tmp_path, monkeypatc
         yaml.safe_dump(
             {
                 "model": "m",
-                "server_url": "u",
+                "server_url": "http+unix://model.sock/v1/chat/completions",
                 "task_map": [
                     {"task_id": "a", "config": "a.yaml"},
                     {"task_id": "b", "config": "/abs/b.yaml"},

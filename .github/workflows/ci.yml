@@ -35,6 +35,7 @@ jobs:
       - run: >-
           pip install pydantic pyyaml tyro msgpack msgpack-numpy "${{ matrix.hub }}"
           numpy pillow gymnasium imageio pytest pytest-timeout
+          requests fastapi uvicorn
       - run: >-
           python -m pytest -q tests
           --ignore=tests/submission --ignore=tests/integrations

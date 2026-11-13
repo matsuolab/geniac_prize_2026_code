@@ -10,12 +10,12 @@ from typing import Any, List
 
 import numpy as np
 import pyroki as pk  # type: ignore
-import uvicorn
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from scipy.spatial.transform import Rotation, Slerp
 
 import capx.integrations.motion.pyroki_snippets as pks
+from capx.utils.unix_http import serve_app
 
 
 def slerp_quaternions(
@@ -381,12 +381,13 @@ async def plan_motion(req: PlanRequest):
 def main(
     robot: str = "panda_description",
     target_link: str = "panda_hand",
-    port: int = 8116,
-    host: str = "127.0.0.1",
+    socket: str = "pyroki.sock",
 ):
     init_pyroki_server(robot_urdf_name=robot, target_link_name=target_link)
-    uvicorn.run(app, host=host, port=port)
+    serve_app(app, socket)
 
 
 if __name__ == "__main__":
-    main()
+    import tyro
+
+    tyro.cli(main)

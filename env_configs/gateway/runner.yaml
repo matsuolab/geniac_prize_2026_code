@@ -3,7 +3,7 @@ gateway_host: gateway
 gateway_port: 8000
 
 model: Qwen/Qwen3.6-27B
-server_url: http://127.0.0.1:8110/v1/chat/completions
+server_url: http+unix://model.sock/v1/chat/completions
 temperature: 0.0
 # R1Pro multiturn prompts need long reasoning: 4096 truncates mid-thinking.
 # The server's --max-model-len (agent0-entrypoint.sh) leaves room for it.

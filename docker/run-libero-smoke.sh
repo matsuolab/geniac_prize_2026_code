@@ -8,7 +8,7 @@
 #   bash /workspace/run-libero-smoke.sh
 #
 # Does:
-#   1. Starts the OpenAI proxy on 127.0.0.1:8110 in the background.
+#   1. Starts the OpenAI proxy on the Unix socket model.sock in the background.
 #   2. Runs 2 trials of libero_spatial task 0 (privileged API -> no SAM3/GraspNet).
 #   3. Writes outputs/ videos and a result JSON, then tears the proxy down.
 set -euo pipefail
@@ -16,7 +16,7 @@ set -euo pipefail
 CAPX_DIR="${CAPX_DIR:-/workspace/cap-x}"
 MODEL="${MODEL:-gpt-5}"
 CONFIG="${CONFIG:-env_configs/libero/franka_libero_spatial_0_smoke.yaml}"
-PORT="${PORT:-8110}"
+SOCKET="${CAPX_SOCKET_DIR:-${HOME}/.capx/sockets}/model.sock"
 
 if [[ -z "${OPENAI_API_KEY:-}" ]] && [[ ! -f "${CAPX_DIR}/.openaikey" ]]; then
     echo "ERROR: need OPENAI_API_KEY env var or ${CAPX_DIR}/.openaikey file" >&2
@@ -37,14 +37,14 @@ LOG_DIR="${CAPX_DIR}/outputs/_smoke_logs"
 mkdir -p "${LOG_DIR}"
 PROXY_LOG="${LOG_DIR}/openai_proxy.log"
 
-echo "[smoke] Starting OpenAI proxy on :${PORT} (log: ${PROXY_LOG})"
-python capx/serving/openai_server.py --port "${PORT}" > "${PROXY_LOG}" 2>&1 &
+echo "[smoke] Starting OpenAI proxy on ${SOCKET} (log: ${PROXY_LOG})"
+python capx/serving/openai_server.py --socket "${SOCKET}" > "${PROXY_LOG}" 2>&1 &
 PROXY_PID=$!
 trap 'echo "[smoke] Stopping proxy (pid ${PROXY_PID})"; kill "${PROXY_PID}" 2>/dev/null || true' EXIT
 
 # Wait for /health
 for i in {1..30}; do
-    if curl -fsS "http://127.0.0.1:${PORT}/health" >/dev/null 2>&1; then
+    if curl -fsS --unix-socket "${SOCKET}" "http://localhost/health" >/dev/null 2>&1; then
         echo "[smoke] proxy ready"
         break
     fi
@@ -58,7 +58,7 @@ echo "[smoke] Launching eval: model=${MODEL} config=${CONFIG}"
 python capx/envs/launch.py \
     --config-path "${CONFIG}" \
     --model "${MODEL}" \
-    --server-url "http://127.0.0.1:${PORT}/chat/completions" \
+    --server-url "http+unix://model.sock/chat/completions" \
     --max-tokens "${MAX_TOKENS:-8192}" \
     --total-trials 2 \
     --num-workers 1

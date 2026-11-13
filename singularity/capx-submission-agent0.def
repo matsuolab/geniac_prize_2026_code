@@ -10,9 +10,9 @@
 #   /opt/venv-serve   vLLM + transformers>=5 + torch built for CUDA 13
 #   system python     cap-x client stack (agent loop, SAM3, GraspNet, pyroki IK)
 #
-# The runscript starts vLLM on loopback, waits for it, then runs the agent. The
-# eval queue gives the container a loopback-only network namespace, which is exactly
-# enough for the model server and the perception sidecars and nothing else.
+# The runscript starts vLLM on a Unix socket, waits for it, then runs the agent. The
+# model server and the perception sidecars listen only on Unix sockets in a 0700
+# directory (CAPX_SOCKET_DIR), never on a TCP port.
 #
 # Build (on a compute node; this one is large and slow):
 #   sbatch -p part-$(id -gn) -t 08:00:00 singularity/build.sbatch submission-agent0

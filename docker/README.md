@@ -83,8 +83,8 @@ bash docker/run.sh
   （sam3、contact_graspnet、curobo など）がその世代向けにビルドされます。
 - `run.sh` は空いている GPU を1枚選び（`GPUS=device=N` で指定もできます）、ホスト側の
   ポートを空いているものに割り当てます（`LLM_PROXY_PORT`、`WEBUI_PORT` で指定もできます）。
-  LLM のプロキシ（`capx/serving/openai_server.py` など）は既定でコンテナの中の 127.0.0.1 だけで
-  待ち受けます。ホストから使うときは `--host 0.0.0.0` を付けて起動します。
+  LLM のプロキシ（`capx/serving/openai_server.py` など）は、コンテナの中の Unix ソケット
+  （`CAPX_SOCKET_DIR`、既定は `~/.capx/sockets` の `model.sock`）だけで待ち受けます。
 - `docker/api_keys.yaml` と `hf_token` から API キーと HuggingFace のトークンを読みます。
 - `CAPX_HF_CACHE_DIR` で HuggingFace のキャッシュの場所を、`CAPX_SHARED_DATASET_DIR` で
   複数のユーザーが共有するデータセットのディレクトリを指定できます。
@@ -105,10 +105,15 @@ bash /workspace/docker/run-behavior-smoke.sh
 API キーなしで試すときは、Qwen3.6-27B をコンテナの中で立てて使えます。
 
 ```bash
-bash /workspace/docker/run-qwen-server.sh &   # vLLM を :8110 で起動
+bash /workspace/docker/run-qwen-server.sh &   # vLLM を model.sock で起動
 bash /workspace/docker/run-robosuite-qwen.sh
 ```
 
+- vLLM と知覚・IK のサーバー（SAM3、GraspNet、PyRoKi など）は TCP のポートを開かず、
+  `CAPX_SOCKET_DIR`（既定は `~/.capx/sockets`）の Unix ソケットだけで待ち受けます。
+  クライアントは `http+unix://model.sock/v1/chat/completions` のような URL で接続します
+  （[README](../README.md#注意点)）。このディレクトリは自分だけが入れる 0700 にしてください。
+  `/tmp` の直下には置かず、`chmod 777` などで他のユーザーに開けないでください。
 - 初回は重み（約52GB）をダウンロードします。
 - SAM3 など gated なモデルを使う設定では、[facebook/sam3](https://huggingface.co/facebook/sam3)
   にアクセスできるトークンが必要です。
