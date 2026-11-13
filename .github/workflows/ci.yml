@@ -34,7 +34,7 @@ jobs:
           python-version: "3.12"
       - run: >-
           pip install pydantic pyyaml tyro msgpack msgpack-numpy "${{ matrix.hub }}"
-          numpy pillow gymnasium imageio pytest pytest-timeout
+          numpy pillow gymnasium imageio imageio-ffmpeg pytest pytest-timeout
       - run: >-
           python -m pytest -q tests
           --ignore=tests/submission --ignore=tests/integrations
