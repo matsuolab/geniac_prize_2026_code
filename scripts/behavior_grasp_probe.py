@@ -239,7 +239,9 @@ def instrumented_grasp(api: Any, shim: Any, log: ProbeLog, out_dir: pathlib.Path
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--out", default="outputs/behavior_debug/probe_01")
-    parser.add_argument("--backend", default="behavior=127.0.0.1:18102")
+    parser.add_argument(
+        "--backend", default=f"behavior=unix:{pathlib.Path.home()}/.capx/sock/behavior.sock"
+    )
     parser.add_argument("--taskpack", default="taskpacks/original")
     parser.add_argument("--task-id", default="picking_up_trash")
     parser.add_argument("--object", default="can of soda")
