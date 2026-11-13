@@ -1,9 +1,9 @@
 # CapX SUBMISSION container — the team's forkable model/agent side.
 #
-# Runs the agent loop (EnvClient over HttpTransport) against the environment
-# container. Teams fork this and swap HoldPolicy for their vLLM + perception +
-# primitive stack. In official mode it sits on the egress-blocked policy_network
-# with model weights mounted read-only and HF_HUB_OFFLINE=1 (docker-compose.yml).
+# Runs the agent loop (EnvClient over UnixTransport) against the gateway's socket.
+# Teams fork this and swap HoldPolicy for their vLLM + perception + primitive
+# stack. It runs with no network, model weights mounted read-only and
+# HF_HUB_OFFLINE=1 (docker-compose.yml).
 #
 # NOTE: provided as a scaffold — NOT built or verified in this environment (needs a
 # GPU host + full image build).
@@ -16,8 +16,7 @@ ENV DEBIAN_FRONTEND=noninteractive \
     PYTHONPATH=/workspace/capx \
     HF_HUB_OFFLINE=1 \
     HF_HOME=/weights \
-    CAPX_ENV_HOST=gateway \
-    CAPX_ENV_PORT=8000
+    CAPX_ENV_SOCKET=/capx/run/gateway.sock
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
         software-properties-common ca-certificates \

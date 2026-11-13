@@ -8,9 +8,8 @@ in one evaluation, and :class:`RemoteEnvFactory` routes each task by
 
 The backend link is internal: it carries raw sim obs (privileged fields included)
 and reward/success, so it must never be reachable by a submission. It is the
-``capx.protocol.framing`` wire over TCP or AF_UNIX (``unix:/path`` in a route); the
-eval queue uses Unix sockets in a run-private directory, because loopback on a
-shared Slurm node is visible to every job on the box.
+``capx.protocol.framing`` wire over an AF_UNIX socket (``unix:/path`` in a route),
+kept in a run-private directory.
 
 One connection is one env lifecycle: ``build`` (carrying the ``TaskSpec``), then
 reset / apply_raw_action (which also reports success) / get_* / reward / sim_time
@@ -33,8 +32,8 @@ from capx.gateway.gateway import EnvFactory
 from capx.gateway.low_level import LowLevelEnv, StepOutcome
 from capx.protocol.actions import RawAction, decode_action, encode_action
 from capx.protocol.framing import (
-    bind_stream_socket,
-    connect_stream_socket,
+    bind_unix_socket,
+    connect_unix_socket,
     recv_framed,
     send_framed,
 )
@@ -44,14 +43,12 @@ _logger = logging.getLogger(__name__)
 
 
 class BackendAddress(NamedTuple):
-    """Where one env-backend process listens: TCP ``host:port`` or a Unix socket."""
+    """The Unix socket one env-backend process listens on."""
 
-    host: str = ""
-    port: int = 0
-    unix_path: str | None = None
+    path: str
 
     def __str__(self) -> str:
-        return self.unix_path if self.unix_path else f"{self.host}:{self.port}"
+        return self.path
 
 
 class EnvBackendServer:
@@ -66,22 +63,17 @@ class EnvBackendServer:
     def __init__(
         self,
         factory: EnvFactory,
-        host: str = "127.0.0.1",
-        port: int = 0,
-        *,
-        unix_path: str | None = None,
+        path: str,
     ) -> None:
         self._factory = factory
-        self._unix_path = unix_path
-        self._sock, self.host, self.port = bind_stream_socket(
-            host=host, port=port, unix_path=unix_path
-        )
+        self._path = path
+        self._sock = bind_unix_socket(path)
         self._stop = threading.Event()
         self._serving = threading.Lock()
 
     @property
     def address(self) -> BackendAddress:
-        return BackendAddress(self.host, self.port, self._unix_path)
+        return BackendAddress(self._path)
 
     def start_background(self) -> EnvBackendServer:
         threading.Thread(target=self.serve_forever, daemon=True).start()
@@ -154,9 +146,8 @@ class EnvBackendServer:
     def close(self) -> None:
         self._stop.set()
         self._sock.close()
-        if self._unix_path is not None:
-            with contextlib.suppress(OSError):
-                os.unlink(self._unix_path)
+        with contextlib.suppress(OSError):
+            os.unlink(self._path)
 
 
 # A backend that is still importing its simulator refuses connections (or has not
@@ -177,9 +168,7 @@ def _connect_when_listening(address: BackendAddress, timeout_s: float) -> socket
     deadline = time.monotonic() + timeout_s
     while True:
         try:
-            return connect_stream_socket(
-                host=address.host, port=address.port, unix_path=address.unix_path
-            )
+            return connect_unix_socket(address.path)
         except (ConnectionRefusedError, FileNotFoundError):
             if time.monotonic() >= deadline:
                 raise
@@ -313,8 +302,8 @@ class RemoteEnvFactory:
             raise KeyError(f"no backend route for simulator {sim!r}")
         address = self._take(sim, pool)
         try:
-            if self._on_demand and address.unix_path is not None:
-                _request_start(Path(address.unix_path))
+            if self._on_demand:
+                _request_start(Path(address.path))
             sock = _connect_when_listening(address, self._start_timeout_s)
         except BaseException:
             self._release(sim, address)
@@ -367,9 +356,7 @@ class RemoteEnvFactory:
         connection at a time). A backend that is gone is free too: the runner
         restarts a process that exited when it is next asked for."""
         try:
-            with connect_stream_socket(
-                host=address.host, port=address.port, unix_path=address.unix_path
-            ) as sock:
+            with connect_unix_socket(address.path) as sock:
                 send_framed(sock, {"method": "ping", "payload": {}})
                 recv_framed(sock)
             _logger.warning("the %s backend at %s answers again", sim, address)
@@ -385,33 +372,24 @@ def _request_start(socket_path: Path) -> None:
 
 
 def parse_backend_routes(entries: list[str]) -> dict[str, list[BackendAddress]]:
-    """Parse ``"simulator=host:port"`` / ``"simulator=unix:/path"`` specs into a route map.
+    """Parse ``"simulator=unix:/path"`` specs into a route map.
 
-    e.g. ``["robosuite=127.0.0.1:8100", "libero=unix:/run/capx/libero.sock"]``.
+    e.g. ``["robosuite=unix:/run/capx/robosuite.sock", "libero=unix:/run/capx/libero.sock"]``.
     Repeat a simulator to give it a backend pool, one process per lane.
     """
     routes: dict[str, list[BackendAddress]] = {}
     for entry in entries:
         sim, sep, addr = entry.partition("=")
-        if not sep:
-            raise ValueError(
-                f"bad backend spec {entry!r}; expected 'simulator=host:port' or "
-                "'simulator=unix:/path'"
-            )
         addr = addr.strip()
-        if addr.startswith("unix:"):
-            path = addr[len("unix:") :]
-            if not path:
-                raise ValueError(f"bad backend spec {entry!r}; 'unix:' needs a socket path")
-            routes.setdefault(sim.strip(), []).append(BackendAddress(unix_path=path))
-            continue
-        host, colon, port = addr.rpartition(":")
-        if not colon:
+        if not sep or not addr.startswith("unix:"):
             raise ValueError(
-                f"bad backend spec {entry!r}; expected 'simulator=host:port' or "
-                "'simulator=unix:/path'"
+                f"bad backend spec {entry!r}; expected 'simulator=unix:/path' "
+                "(backends listen only on Unix sockets)"
             )
-        routes.setdefault(sim.strip(), []).append(BackendAddress(host.strip(), int(port)))
+        path = addr[len("unix:") :]
+        if not path:
+            raise ValueError(f"bad backend spec {entry!r}; 'unix:' needs a socket path")
+        routes.setdefault(sim.strip(), []).append(BackendAddress(path))
     return routes
 
 

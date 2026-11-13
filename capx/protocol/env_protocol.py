@@ -1,8 +1,7 @@
 """The RPC seam: ``EnvProtocol`` (what the gateway serves), ``Transport`` and ``EnvClient``.
 
 - ``InProcessTransport`` — client and gateway lane in one process (dev).
-- ``HttpTransport`` — framed msgpack over TCP (two containers).
-- ``UnixTransport`` — the same wire over an AF_UNIX socket, for a submission
+- ``UnixTransport`` — framed msgpack over an AF_UNIX socket, for a submission
   container with no network stack (eval queue).
 
 Every transport runs the same ``dispatch_to_wire``, so dev and official behave
@@ -262,20 +261,6 @@ class _FramedTransport:
             self._sock = None
 
 
-class HttpTransport(_FramedTransport):
-    """Official transport over TCP — two containers sharing a host network."""
-
-    def __init__(self, host: str, port: int) -> None:
-        super().__init__()
-        self._host = host
-        self._port = port
-
-    def _open(self) -> socket.socket:
-        from capx.protocol.framing import connect_stream_socket
-
-        return connect_stream_socket(host=self._host, port=self._port)
-
-
 class UnixTransport(_FramedTransport):
     """Official transport over an AF_UNIX socket bind-mounted into a submission
     container that has no network stack (``--network=none``)."""
@@ -285,9 +270,9 @@ class UnixTransport(_FramedTransport):
         self._path = path
 
     def _open(self) -> socket.socket:
-        from capx.protocol.framing import connect_stream_socket
+        from capx.protocol.framing import connect_unix_socket
 
-        return connect_stream_socket(unix_path=self._path)
+        return connect_unix_socket(self._path)
 
 
 class EnvClient:
@@ -351,7 +336,6 @@ __all__ = [
     "Transport",
     "ConnectionTransport",
     "InProcessTransport",
-    "HttpTransport",
     "UnixTransport",
     "EnvClient",
 ]

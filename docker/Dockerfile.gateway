@@ -1,11 +1,11 @@
 # CapX GATEWAY container (3-tier, D7) — the organizer's referee, simulator-agnostic.
 #
 # Runs capx.gateway (referee / ObsFilter / scoring) via docker/serve_environment.py
-# and exposes only reset / step / get_observation to the submission over the
-# egress-blocked policy_network. It imports NO simulator: with CAPX_BACKENDS set it
-# routes each task to an env-backend container (RemoteEnvFactory) over the internal
-# sim_network. Because it hosts no sim, this image is small and CPU-only (no CUDA,
-# no robosuite/mujoco).
+# and exposes only reset / step / get_observation to the submission over a Unix
+# socket in a volume shared with it. It imports NO simulator: with CAPX_BACKENDS set
+# it routes each task to an env-backend container (RemoteEnvFactory) over Unix
+# sockets in a second volume the submission never mounts. Because it hosts no sim,
+# this image is small and CPU-only (no CUDA, no robosuite/mujoco).
 #
 # NOTE: provided as a scaffold — NOT built or verified in this environment.
 
@@ -16,8 +16,7 @@ ENV PYTHONUNBUFFERED=1 \
     PYTHONPATH=/workspace/capx \
     CAPX_MODE=official \
     CAPX_TASKPACK=taskpacks/original \
-    CAPX_HOST=0.0.0.0 \
-    CAPX_PORT=8000
+    CAPX_UNIX=/capx/run/gateway.sock
 
 WORKDIR /workspace/capx
 COPY . /workspace/capx

@@ -1,14 +1,14 @@
 # CapX official-mode evaluation — 3-tier topology (D7) on one node.
 #
-# Two INTERNAL networks (each `internal: true` = no route off the node, so egress is
-# blocked in official mode):
+# No service has a network (`network_mode: none`); they talk over Unix sockets in two
+# volumes:
 #
-#   policy_network  submission <-> gateway    (the only surface a submission sees)
-#   sim_network     gateway    <-> env-*      (privileged raw obs; submission NOT on it)
+#   policy-socket  submission <-> gateway    (the only surface a submission sees)
+#   sim-sockets    gateway    <-> env-*      (privileged raw obs; submission NOT mounted)
 #
-# The submission attaches to policy_network ONLY, so it can reach the gateway and
-# nothing else — not the sim backends, not the internet. The gateway bridges both
-# networks and imports no simulator; it routes each task to an env-backend by
+# The submission mounts policy-socket ONLY, so it can reach the gateway and nothing
+# else — not the sim backends, not the internet. The gateway mounts both volumes
+# and imports no simulator; it routes each task to an env-backend by
 # TaskSpec.simulator (CAPX_BACKENDS). All three backends (Robosuite, LIBERO,
 # BEHAVIOR) start by default. env-behavior builds without assets; before running
 # behavior tasks, fetch them once into the `behavior-assets` volume with
@@ -16,8 +16,8 @@
 # docker/README.md). To run without BEHAVIOR, drop it from CAPX_BACKENDS and
 # `docker compose up gateway submission env-robosuite env-libero`.
 #
-# Do NOT attach a non-internal network to `submission`, or the egress block is
-# defeated. Model weights are mounted read-only and served offline (HF_HUB_OFFLINE=1).
+# Do NOT give `submission` a network or mount sim-sockets into it, or the isolation
+# is defeated. Model weights are mounted read-only and served offline (HF_HUB_OFFLINE=1).
 
 services:
   gateway:
@@ -33,12 +33,12 @@ services:
       CAPX_TASKPACK: ${CAPX_TASKPACK:-taskpacks/original}
       CAPX_MODE: ${CAPX_MODE:-official}
       CAPX_SIMULATORS: ${CAPX_SIMULATORS:-}
-      CAPX_HOST: 0.0.0.0
-      CAPX_PORT: "8000"
-      CAPX_BACKENDS: ${CAPX_BACKENDS:-robosuite=env-robosuite:8100,libero=env-libero:8100,behavior=env-behavior:8100}
-    networks:
-      - policy_network
-      - sim_network
+      CAPX_UNIX: /capx/run/gateway.sock
+      CAPX_BACKENDS: ${CAPX_BACKENDS:-robosuite=unix:/capx/sock/robosuite.sock,libero=unix:/capx/sock/libero.sock,behavior=unix:/capx/sock/behavior.sock}
+    volumes:
+      - policy-socket:/capx/run
+      - sim-sockets:/capx/sock
+    network_mode: none
 
   env-robosuite:
     build:
@@ -48,14 +48,14 @@ services:
     environment:
       CAPX_SIMULATOR: robosuite
       CAPX_TASKPACK: ${CAPX_TASKPACK:-taskpacks/original}
-      CAPX_BACKEND_HOST: 0.0.0.0
-      CAPX_BACKEND_PORT: "8100"
+      CAPX_BACKEND_UNIX: /capx/sock/robosuite.sock
       MUJOCO_GL: egl
       # Headless EGL rendering needs the driver's graphics libs; the nvidia
       # runtime injects them only when asked (its default is compute,utility).
       NVIDIA_DRIVER_CAPABILITIES: all
-    networks:
-      - sim_network
+    volumes:
+      - sim-sockets:/capx/sock
+    network_mode: none
     deploy:
       resources:
         reservations:
@@ -72,12 +72,12 @@ services:
     environment:
       CAPX_SIMULATOR: libero
       CAPX_TASKPACK: ${CAPX_TASKPACK:-taskpacks/original}
-      CAPX_BACKEND_HOST: 0.0.0.0
-      CAPX_BACKEND_PORT: "8100"
+      CAPX_BACKEND_UNIX: /capx/sock/libero.sock
       MUJOCO_GL: egl
       NVIDIA_DRIVER_CAPABILITIES: all
-    networks:
-      - sim_network
+    volumes:
+      - sim-sockets:/capx/sock
+    network_mode: none
     deploy:
       resources:
         reservations:
@@ -106,8 +106,7 @@ services:
     environment:
       CAPX_SIMULATOR: behavior
       CAPX_TASKPACK: ${CAPX_TASKPACK:-taskpacks/original}
-      CAPX_BACKEND_HOST: 0.0.0.0
-      CAPX_BACKEND_PORT: "8100"
+      CAPX_BACKEND_UNIX: /capx/sock/behavior.sock
       # Isaac Sim renders through Vulkan, which needs the driver's graphics libs.
       NVIDIA_DRIVER_CAPABILITIES: all
       # Assets live in a named volume so image rebuilds don't refetch them:
@@ -120,9 +119,9 @@ services:
     volumes:
       - behavior-assets:/data
       - behavior-appdata:/cache
+      - sim-sockets:/capx/sock
     shm_size: 16gb
-    networks:
-      - sim_network
+    network_mode: none
     deploy:
       resources:
         reservations:
@@ -133,8 +132,8 @@ services:
               capabilities: [gpu]
 
   # One-shot asset fetcher: `docker compose --profile assets run --rm fetch-behavior-assets`.
-  # Deliberately OFF the internal networks — the download needs internet egress,
-  # which sim_network/policy_network block by design. Running it accepts the
+  # The only service with a network: the download needs internet egress, which
+  # the evaluation services do not have. Running it accepts the
   # BEHAVIOR dataset license.
   fetch-behavior-assets:
     profiles: ["assets"]
@@ -154,14 +153,13 @@ services:
     depends_on:
       - gateway
     environment:
-      CAPX_ENV_HOST: gateway
-      CAPX_ENV_PORT: "8000"
+      CAPX_ENV_SOCKET: /capx/run/gateway.sock
       HF_HUB_OFFLINE: "1"
       HF_HOME: /weights
     volumes:
       - ./weights:/weights:ro
-    networks:
-      - policy_network
+      - policy-socket:/capx/run
+    network_mode: none
     deploy:
       resources:
         reservations:
@@ -170,12 +168,8 @@ services:
               count: all
               capabilities: [gpu]
 
-networks:
-  policy_network:
-    internal: true
-  sim_network:
-    internal: true
-
 volumes:
+  policy-socket:
+  sim-sockets:
   behavior-assets:
   behavior-appdata:

@@ -18,7 +18,7 @@ import time
 import msgpack
 import numpy as np
 import pytest
-from test_http_transport import VALID_JOINTS, FakeEnv, FakeFactory, make_tasks
+from test_socket_transport import VALID_JOINTS, FakeEnv, FakeFactory, make_tasks
 
 from capx.gateway import EnforcementMode, Gateway
 from capx.gateway.server import GatewayServer
@@ -27,10 +27,12 @@ from capx.protocol import (
     ErrorCode,
     FrankaRawAction,
     GatewayError,
-    HttpTransport,
     InProcessTransport,
+    UnixTransport,
 )
+from capx.protocol.framing import connect_unix_socket
 from capx.protocol.taskpack import SeedPolicy
+from socket_paths import fresh_socket_path
 
 
 class IsolatingFactory(FakeFactory):
@@ -210,8 +212,8 @@ def test_concurrency_is_refused_on_a_factory_that_shares_one_sim() -> None:
 def test_two_connections_are_two_lanes() -> None:
     """The wire is unchanged: a submission gets concurrency by opening connections."""
     gateway = gateway_with(2)
-    server = GatewayServer(gateway).start_background()
-    clients = [EnvClient(HttpTransport(server.host, server.port)) for _ in range(2)]
+    server = GatewayServer(gateway, fresh_socket_path()).start_background()
+    clients = [EnvClient(UnixTransport(server.path)) for _ in range(2)]
     try:
         first, second = (client.reset("t") for client in clients)
         assert first.episode_id != second.episode_id
@@ -227,11 +229,11 @@ def test_two_connections_are_two_lanes() -> None:
 def test_a_connection_past_the_cap_is_told_why() -> None:
     """An unexplained EOF would look like a crashed gateway to the submission."""
     gateway = gateway_with(1)
-    server = GatewayServer(gateway).start_background()
-    held = EnvClient(HttpTransport(server.host, server.port))
+    server = GatewayServer(gateway, fresh_socket_path()).start_background()
+    held = EnvClient(UnixTransport(server.path))
     try:
         held.reset("t")
-        extra = EnvClient(HttpTransport(server.host, server.port))
+        extra = EnvClient(UnixTransport(server.path))
         with pytest.raises(RuntimeError, match="concurrent lane"):
             extra.reset("t")
     finally:
@@ -241,13 +243,13 @@ def test_a_connection_past_the_cap_is_told_why() -> None:
 
 def test_a_disconnect_frees_the_lane() -> None:
     gateway = gateway_with(1)
-    server = GatewayServer(gateway).start_background()
+    server = GatewayServer(gateway, fresh_socket_path()).start_background()
     try:
-        first = EnvClient(HttpTransport(server.host, server.port))
+        first = EnvClient(UnixTransport(server.path))
         first.reset("t")
         first._transport.close()  # the submission container died mid-run
 
-        second = EnvClient(HttpTransport(server.host, server.port))
+        second = EnvClient(UnixTransport(server.path))
         for _ in range(50):  # the server frees the lane on its own thread
             try:
                 second.reset("t")
@@ -263,13 +265,13 @@ def test_a_disconnect_frees_the_lane() -> None:
 
 def test_closing_a_client_hands_its_lane_to_the_next_connection() -> None:
     gateway = gateway_with(1)
-    server = GatewayServer(gateway).start_background()
+    server = GatewayServer(gateway, fresh_socket_path()).start_background()
     try:
-        first = EnvClient(HttpTransport(server.host, server.port))
+        first = EnvClient(UnixTransport(server.path))
         first.reset("t")
         first.close()
 
-        second = EnvClient(HttpTransport(server.host, server.port))
+        second = EnvClient(UnixTransport(server.path))
         second.reset("t")
         second.close()
         first.reset("t")  # a closed client reconnects as a new lane
@@ -280,14 +282,14 @@ def test_closing_a_client_hands_its_lane_to_the_next_connection() -> None:
 
 def test_closing_a_client_over_an_already_connected_transport_frees_the_lane() -> None:
     gateway = gateway_with(1)
-    server = GatewayServer(gateway).start_background()
+    server = GatewayServer(gateway, fresh_socket_path()).start_background()
     try:
-        transport = HttpTransport(server.host, server.port)
+        transport = UnixTransport(server.path)
         transport.call("manifest", {})
         EnvClient(transport).close()
         assert not transport.connected
 
-        other = EnvClient(HttpTransport(server.host, server.port))
+        other = EnvClient(UnixTransport(server.path))
         other.reset("t")
         other.close()
     finally:
@@ -296,8 +298,8 @@ def test_closing_a_client_over_an_already_connected_transport_frees_the_lane() -
 
 def test_a_transport_reconnects_after_a_close_call() -> None:
     gateway = gateway_with(1)
-    server = GatewayServer(gateway).start_background()
-    transport = HttpTransport(server.host, server.port)
+    server = GatewayServer(gateway, fresh_socket_path()).start_background()
+    transport = UnixTransport(server.path)
     try:
         transport.call("close", {})
         assert not transport.connected
@@ -309,8 +311,8 @@ def test_a_transport_reconnects_after_a_close_call() -> None:
 
 def test_a_client_reconnects_right_after_close() -> None:
     gateway = gateway_with(1)
-    server = GatewayServer(gateway, max_connections=1).start_background()
-    client = EnvClient(HttpTransport(server.host, server.port))
+    server = GatewayServer(gateway, fresh_socket_path(), max_connections=1).start_background()
+    client = EnvClient(UnixTransport(server.path))
     try:
         for _ in range(20):
             client.reset("t")
@@ -357,8 +359,8 @@ def test_a_closing_peer_that_stops_reading_releases_its_slot(monkeypatch) -> Non
     monkeypatch.setattr(server_module, "send_framed", send_to_a_peer_that_stopped_reading)
     monkeypatch.setattr(server_module, "REFUSAL_TIMEOUT_S", 0.2)
     gateway = gateway_with(1)
-    server = GatewayServer(gateway, max_connections=1).start_background()
-    stalled = HttpTransport(server.host, server.port)
+    server = GatewayServer(gateway, fresh_socket_path(), max_connections=1).start_background()
+    stalled = UnixTransport(server.path)
     try:
         stalled.call("manifest", {})
         def close_and_never_read() -> None:
@@ -368,7 +370,7 @@ def test_a_closing_peer_that_stops_reading_releases_its_slot(monkeypatch) -> Non
         threading.Thread(target=close_and_never_read, daemon=True).start()
         time.sleep(0.5)
 
-        other = EnvClient(HttpTransport(server.host, server.port))
+        other = EnvClient(UnixTransport(server.path))
         try:
             other.reset("t")
         except (ConnectionError, OSError, RuntimeError) as exc:
@@ -383,11 +385,11 @@ def test_a_closing_peer_that_stops_reading_releases_its_slot(monkeypatch) -> Non
 def test_connections_past_the_connection_cap_are_dropped() -> None:
     """A flood of idle connections cannot hold a thread each."""
     gateway = gateway_with(1)
-    server = GatewayServer(gateway, max_connections=2).start_background()
-    held = EnvClient(HttpTransport(server.host, server.port))
+    server = GatewayServer(gateway, fresh_socket_path(), max_connections=2).start_background()
+    held = EnvClient(UnixTransport(server.path))
     held.reset("t")
-    idle = socket.create_connection((server.host, server.port))
-    flood = socket.create_connection((server.host, server.port))
+    idle = connect_unix_socket(server.path)
+    flood = connect_unix_socket(server.path)
     try:
         flood.settimeout(5)
         assert flood.recv(1) == b""  # closed by the server, not left hanging
@@ -401,10 +403,10 @@ def test_connections_past_the_connection_cap_are_dropped() -> None:
 def test_a_refused_connection_that_never_asks_is_dropped(monkeypatch) -> None:
     monkeypatch.setattr("capx.gateway.server.REFUSAL_TIMEOUT_S", 0.2)
     gateway = gateway_with(1)
-    server = GatewayServer(gateway).start_background()
-    held = EnvClient(HttpTransport(server.host, server.port))
+    server = GatewayServer(gateway, fresh_socket_path()).start_background()
+    held = EnvClient(UnixTransport(server.path))
     held.reset("t")
-    silent = socket.create_connection((server.host, server.port))
+    silent = connect_unix_socket(server.path)
     try:
         silent.settimeout(5)
         assert silent.recv(1) == b""
@@ -419,10 +421,10 @@ def test_a_refused_connection_cannot_trickle_its_request(monkeypatch) -> None:
     frame ends this."""
     monkeypatch.setattr("capx.gateway.server.REFUSAL_TIMEOUT_S", 0.5)
     gateway = gateway_with(1)
-    server = GatewayServer(gateway).start_background()
-    held = EnvClient(HttpTransport(server.host, server.port))
+    server = GatewayServer(gateway, fresh_socket_path()).start_background()
+    held = EnvClient(UnixTransport(server.path))
     held.reset("t")
-    slow = socket.create_connection((server.host, server.port))
+    slow = connect_unix_socket(server.path)
     try:
         started = time.monotonic()
         slow.sendall(struct.pack("!I", 100))
@@ -447,8 +449,8 @@ def test_a_non_string_method_is_answered_and_the_lane_stays_usable() -> None:
     from capx.protocol.framing import packb, recv_framed
 
     gateway = gateway_with(1)
-    server = GatewayServer(gateway).start_background()
-    sock = socket.create_connection((server.host, server.port))
+    server = GatewayServer(gateway, fresh_socket_path()).start_background()
+    sock = connect_unix_socket(server.path)
     try:
         for method in (np.zeros(2), ["close"], 3):
             payload = packb({"method": method, "payload": {}})
@@ -466,8 +468,8 @@ def test_a_malformed_frame_is_answered_and_the_lane_stays_usable() -> None:
     from capx.protocol.framing import recv_framed
 
     gateway = gateway_with(1)
-    server = GatewayServer(gateway).start_background()
-    sock = socket.create_connection((server.host, server.port))
+    server = GatewayServer(gateway, fresh_socket_path()).start_background()
+    sock = connect_unix_socket(server.path)
     try:
         sock.sendall(struct.pack("!I", 3) + b"\xc1\xc1\xc1")
         reply = recv_framed(sock)
@@ -485,8 +487,8 @@ def test_an_oversized_request_closes_the_connection() -> None:
     from capx.gateway.server import MAX_REQUEST_BYTES
 
     gateway = gateway_with(1)
-    server = GatewayServer(gateway).start_background()
-    sock = socket.create_connection((server.host, server.port))
+    server = GatewayServer(gateway, fresh_socket_path()).start_background()
+    sock = connect_unix_socket(server.path)
     try:
         sock.sendall(struct.pack("!I", MAX_REQUEST_BYTES + 1))
         sock.settimeout(5)

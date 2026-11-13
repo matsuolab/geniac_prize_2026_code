@@ -1,4 +1,4 @@
-"""Threaded msgpack-socket server exposing a :class:`Gateway` (TCP or AF_UNIX).
+"""Threaded msgpack-socket server exposing a :class:`Gateway` on an AF_UNIX socket.
 
 One connection is one lane: each accepted connection claims a ``GatewaySession``
 for its lifetime and hands it back on disconnect, so a submission runs N episodes
@@ -20,7 +20,7 @@ from capx.gateway.gateway import Gateway
 from capx.protocol.env_protocol import dispatch_to_wire
 from capx.protocol.framing import (
     MalformedFrameError,
-    bind_stream_socket,
+    bind_unix_socket,
     recv_framed,
     send_framed,
 )
@@ -40,18 +40,14 @@ class GatewayServer:
     def __init__(
         self,
         gateway: Gateway,
-        host: str = "127.0.0.1",
-        port: int = 0,
+        path: str,
         *,
-        unix_path: str | None = None,
         max_connections: int = 64,
     ) -> None:
         self._gateway = gateway
-        self._unix_path = unix_path
+        self.path = path
         self._connection_slots = threading.BoundedSemaphore(max_connections)
-        self._sock, self.host, self.port = bind_stream_socket(
-            host=host, port=port, unix_path=unix_path
-        )
+        self._sock = bind_unix_socket(path)
         self._stop = threading.Event()
 
     def start_background(self) -> GatewayServer:
@@ -122,9 +118,8 @@ class GatewayServer:
     def close(self) -> None:
         self._stop.set()
         self._sock.close()
-        if self._unix_path is not None:
-            with contextlib.suppress(OSError):
-                os.unlink(self._unix_path)
+        with contextlib.suppress(OSError):
+            os.unlink(self.path)
 
 
 __all__ = ["GatewayServer"]

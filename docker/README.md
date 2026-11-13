@@ -14,22 +14,23 @@
 | `Dockerfile.gateway` | gateway。試行回数・seed・採点を管理し、タスクを `TaskSpec.simulator` に従って各バックエンドへ振り分けます（`CAPX_BACKENDS`）。シミュレータは import しないので CPU だけで動きます。エントリポイントは `serve_environment.py`。 |
 | `Dockerfile.env-robosuite`、`Dockerfile.env-libero`、`Dockerfile.env-behavior` | シミュレータごとのバックエンド。エントリポイントは `serve_env_backend.py`（`CAPX_SIMULATOR` で選ぶ）。GPU が必要です。 |
 | `Dockerfile.submission` | 提出物の例。`EnvClient` で gateway に接続し、エージェントのループを回します。エントリポイントは `run_submission.py`。 |
-| `../docker-compose.yml` | 上の各コンテナを、2つの内部ネットワークでつなぎます。 |
+| `../docker-compose.yml` | 上の各コンテナを、2つのボリュームに置いた Unix ソケットでつなぎます。 |
 
-### ネットワーク
+### 接続
 
-外へ出る経路のない（`internal: true`）ネットワークが2つあります。
+どのコンテナにもネットワークはありません（`network_mode: none`）。コンテナどうしは、2つの
+名前付きボリュームに置いた Unix ソケットで通信します。
 
-- `policy_network`: 提出物と gateway だけをつなぎます。提出物はこれにしか接続しないので、
-  gateway 以外には届きません（シミュレータにも、インターネットにも）。
-- `sim_network`: gateway と各バックエンドをつなぎます。シミュレータの生の観測が流れるので、
-  提出物は接続しません。
+- `policy-socket`（`/capx/run`）: 提出物と gateway だけがマウントします。提出物はこれしか
+  持たないので、gateway 以外には届きません（シミュレータにも、インターネットにも）。
+- `sim-sockets`（`/capx/sock`）: gateway と各バックエンドがマウントします。シミュレータの生の
+  観測が流れるので、提出物にはマウントしません。
 
-提出物のコンテナに、外へ出られるネットワークをつないではいけません。
+提出物のコンテナにネットワークを与えたり、`sim-sockets` をマウントしたりしてはいけません。
 
-本番の評価キューは Docker ではなく Singularity で動き、提出物のコンテナにはネットワークを
-与えず、gateway のソケットだけを渡します。提出物から見た違いは、`EnvClient` の通信が TCP か
-ソケットかだけです（[PRELIM_RULEBOOK.md](../PRELIM_RULEBOOK.md) §4.1）。
+本番の評価キューは Docker ではなく Singularity で動きますが、同じく提出物のコンテナには
+ネットワークを与えず、gateway のソケットだけを `/capx/run/gateway.sock` に渡します
+（[PRELIM_RULEBOOK.md](../PRELIM_RULEBOOK.md) §4.1）。
 
 ### 実行する
 
@@ -38,22 +39,22 @@
 CAPX_TASKPACK=taskpacks/original docker compose up --build
 
 # BEHAVIOR のアセット（約37GB）を、名前付きボリューム behavior-assets に一度だけ取得する。
-# インターネットに出るので内部ネットワークの外で動く。実行すると BEHAVIOR データセットの
+# インターネットに出るので、このサービスだけネットワークを持つ。実行すると BEHAVIOR データセットの
 # ライセンスに同意したことになる
 docker compose build env-behavior
 docker compose --profile assets run --rm fetch-behavior-assets
 
 # 公開パックの BEHAVIOR タスクだけを official モードで動かす
-CAPX_SIMULATORS=behavior CAPX_MODE=official CAPX_BACKENDS=behavior=env-behavior:8100 \
+CAPX_SIMULATORS=behavior CAPX_MODE=official CAPX_BACKENDS=behavior=unix:/capx/sock/behavior.sock \
     docker compose up --build --no-deps --abort-on-container-exit --exit-code-from submission \
     gateway env-behavior submission
 
 # BEHAVIOR を使わない
-CAPX_BACKENDS=robosuite=env-robosuite:8100,libero=env-libero:8100 \
+CAPX_BACKENDS=robosuite=unix:/capx/sock/robosuite.sock,libero=unix:/capx/sock/libero.sock \
     docker compose up --build gateway submission env-robosuite env-libero
 ```
 
-提出物は `CAPX_ENV_HOST=gateway`、`CAPX_ENV_PORT=8000` で gateway に接続します。
+提出物は `CAPX_ENV_SOCKET=/capx/run/gateway.sock` で gateway に接続します。
 
 - `env-behavior` は Blackwell（sm_120）の GPU 向けで、OmniGibson 3.9.2 と Isaac Sim 5.1.0 の
   上に作ります。1つあたり約12GB の GPU メモリを使います。

@@ -15,7 +15,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 from test_bimanual import CAMERA, FakeBimanualFactory, bimanual_tasks, valid_joints
-from test_http_transport import VALID_JOINTS
+from test_socket_transport import VALID_JOINTS
 
 from capx.gateway import EnforcementMode, Gateway
 from capx.protocol import EnvClient, InProcessTransport
@@ -126,7 +126,7 @@ def test_the_obs_carries_both_arms_under_the_names_the_apis_read() -> None:
 
 def test_a_single_arm_task_is_rejected_loudly() -> None:
     """A mismatched pack entry should say so, not index into an empty list."""
-    from test_http_transport import FakeFactory, make_tasks
+    from test_socket_transport import FakeFactory, make_tasks
 
     gateway = Gateway(make_tasks(), FakeFactory(), EnforcementMode.DEV)
     shim = BimanualFrankaGatewayShim(

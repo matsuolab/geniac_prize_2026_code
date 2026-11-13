@@ -9,10 +9,9 @@ Env vars:
 - ``CAPX_MODE``     — ``dev`` | ``official`` (enforcement).
 - ``CAPX_SIMULATORS`` — comma list restricting the pack to these simulators (same
   as ``capx eval --simulators``). Unset serves every task in the pack.
-- ``CAPX_HOST`` / ``CAPX_PORT`` — TCP bind address for the submission-facing socket.
-- ``CAPX_UNIX`` — bind the submission-facing socket at this AF_UNIX path instead of
-  TCP. The eval queue uses this: the submission container has no network stack, so
-  the only surface it can reach is the socket bind-mounted into it.
+- ``CAPX_UNIX`` (required) — AF_UNIX path of the submission-facing socket. There is
+  no TCP option: on a shared node any port is reachable by other users' jobs. Put
+  it in a directory only you can access (``0700``), not directly in ``/tmp``.
 - ``CAPX_CLOCK_STARTED_PATH`` — where to write the wall-clock time (epoch seconds)
   the job budget started, i.e. the submission's first contact. The eval queue
   reads it to know when to stop the submission.
@@ -21,8 +20,8 @@ Env vars:
   its time taken there.
 - ``CAPX_MASTER_SEED`` — root of the per-(task, trial) seed derivation; organizers
   pick a fresh one per official run.
-- ``CAPX_BACKENDS`` (required) — comma list of ``simulator=host:port`` or
-  ``simulator=unix:/path`` (e.g. ``"robosuite=env-robosuite:8100,libero=env-libero:8100"``).
+- ``CAPX_BACKENDS`` (required) — comma list of ``simulator=unix:/path``
+  (e.g. ``"robosuite=unix:/capx/sock/robosuite.sock,libero=unix:/capx/sock/libero.sock"``).
 - ``CAPX_BACKENDS_ON_DEMAND`` — ``1`` when the routed AF_UNIX backends are started
   only when first needed (``RemoteEnvFactory``'s ``on_demand``), as the eval queue
   does. ``CAPX_BACKEND_START_TIMEOUT_S`` is how long to wait for one to listen.
@@ -62,7 +61,7 @@ REFUSED_CONNECTION_SLOTS = 16
 def _routes() -> dict[str, list[BackendAddress]]:
     backends = [e for e in os.environ.get("CAPX_BACKENDS", "").split(",") if e.strip()]
     if not backends:
-        raise SystemExit("CAPX_BACKENDS is required: 'simulator=host:port,...'")
+        raise SystemExit("CAPX_BACKENDS is required: 'simulator=unix:/path,...'")
     return parse_backend_routes(backends)
 
 
@@ -98,9 +97,9 @@ def main() -> None:
 
     taskpack = os.environ.get("CAPX_TASKPACK", "taskpacks/original")
     mode = EnforcementMode(os.environ.get("CAPX_MODE", "official"))
-    host = os.environ.get("CAPX_HOST", "0.0.0.0")
-    port = int(os.environ.get("CAPX_PORT", "8000"))
-    unix_path = os.environ.get("CAPX_UNIX", "").strip() or None
+    unix_path = os.environ.get("CAPX_UNIX", "").strip()
+    if not unix_path:
+        raise SystemExit("CAPX_UNIX is required: the gateway listens only on a Unix socket")
     master_seed = int(os.environ.get("CAPX_MASTER_SEED", "0"))
 
     pack, _ = load_pack(taskpack)
@@ -140,14 +139,12 @@ def main() -> None:
 
     server = GatewayServer(
         gateway,
-        host=host,
-        port=port,
-        unix_path=unix_path,
+        unix_path,
         max_connections=lanes + REFUSED_CONNECTION_SLOTS,
     )
     print(
         f"gateway serving {len(tasks)} task(s) from {taskpack!r} [{mode.value}] "
-        f"via remote backends {caps} on {unix_path or f'{server.host}:{server.port}'} "
+        f"via remote backends {caps} on {unix_path} "
         f"across {lanes} lane(s)",
         flush=True,
     )

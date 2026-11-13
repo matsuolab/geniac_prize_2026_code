@@ -11,10 +11,9 @@ Env vars:
 - ``CAPX_TASKPACK`` — the pack directory, when the pack ships its own envs. Its
   ``register_modules`` for this simulator are imported here, since this is the
   process that builds them.
-- ``CAPX_BACKEND_HOST`` / ``CAPX_BACKEND_PORT`` — TCP bind address (gateway-facing).
-- ``CAPX_BACKEND_UNIX`` — bind an AF_UNIX socket at this path instead of TCP. The
-  eval queue uses this: on a shared Slurm node loopback is visible to every other
-  job on the box, whereas a socket in a run-private directory is not.
+- ``CAPX_BACKEND_UNIX`` (required) — AF_UNIX path of the gateway-facing socket. There
+  is no TCP option: on a shared node any port is reachable by other users' jobs,
+  whereas a socket in a run-private directory is not.
 - ``CAPX_BACKEND_UNIX_OWNER`` — ``uid:gid`` to hand the socket to. The socket is
   0600, so a backend running as root in Docker must give it to the user whose ssh
   forwards it to the gateway (the eval queue's remote backends).
@@ -62,15 +61,12 @@ def main() -> None:
     taskpack = os.environ.get("CAPX_TASKPACK", "").strip()
     if taskpack:
         import_pack_modules(taskpack, simulator)
-    host = os.environ.get("CAPX_BACKEND_HOST", "0.0.0.0")
-    port = int(os.environ.get("CAPX_BACKEND_PORT", "8100"))
-
-    unix_path = os.environ.get("CAPX_BACKEND_UNIX", "").strip() or None
-    server = EnvBackendServer(
-        _local_factory(kind), host=host, port=port, unix_path=unix_path
-    )
+    unix_path = os.environ.get("CAPX_BACKEND_UNIX", "").strip()
+    if not unix_path:
+        raise SystemExit("CAPX_BACKEND_UNIX is required: backends listen only on a Unix socket")
+    server = EnvBackendServer(_local_factory(kind), unix_path)
     owner = os.environ.get("CAPX_BACKEND_UNIX_OWNER", "").strip()
-    if unix_path is not None and owner:
+    if owner:
         uid, gid = (int(part) for part in owner.split(":"))
         os.chown(unix_path, uid, gid)
     print(f"env backend ({simulator}) serving on {server.address}", flush=True)

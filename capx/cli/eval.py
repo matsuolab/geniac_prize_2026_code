@@ -3,11 +3,11 @@
 Without ``--backend`` the gateway builds Robosuite envs in-process; select the
 Robosuite tasks of a mixed pack with ``--simulators robosuite``. With ``--backend``
 it routes each task to a simulator backend process; list every
-``simulator=host:port`` after one ``--backend`` flag.
+``simulator=unix:/path`` after one ``--backend`` flag.
 
     python -m capx.cli.eval --taskpack taskpacks/original --mode dev --simulators robosuite
     python -m capx.cli.eval --taskpack <pack> \\
-        --backend robosuite=127.0.0.1:8100 libero=127.0.0.1:8200
+        --backend robosuite=unix:$HOME/.capx/robosuite.sock libero=unix:$HOME/.capx/libero.sock
 """
 
 from __future__ import annotations
@@ -43,7 +43,7 @@ class EvalArgs:
     max_trials_per_task: int = 1
     max_steps: int = 20
     master_seed: int = 0
-    # 'simulator=host:port', several space-separated after one --backend flag
+    # 'simulator=unix:/path', several space-separated after one --backend flag
     # (repeating the flag does not accumulate). Empty -> in-process Robosuite.
     backend: list[str] = field(default_factory=list)
     # Run only the pack's tasks on these simulators; empty runs every task.

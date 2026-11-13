@@ -1,6 +1,5 @@
 # Usage: python -m capx.submission.run --config-path env_configs/gateway/runner.yaml
-gateway_host: gateway
-gateway_port: 8000
+gateway_socket: /capx/run/gateway.sock
 
 model: Qwen/Qwen3.6-27B
 server_url: http://127.0.0.1:8110/v1/chat/completions

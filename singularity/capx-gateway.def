@@ -46,8 +46,6 @@ From: python:3.11-slim
     export PYTHONPATH=/workspace/capx
     export CAPX_MODE=official
     export CAPX_TASKPACK=taskpacks/original
-    export CAPX_HOST=127.0.0.1
-    export CAPX_PORT=8000
 
 %runscript
     cd /workspace/capx

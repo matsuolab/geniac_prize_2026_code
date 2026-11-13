@@ -52,14 +52,17 @@ docker compose up --build
 
 ```bash
 # ターミナル1: シミュレータのバックエンド
-CAPX_SIMULATOR=robosuite CAPX_BACKEND_PORT=8100 python docker/serve_env_backend.py
+CAPX_SIMULATOR=robosuite CAPX_BACKEND_UNIX=$HOME/.capx/sock/robosuite.sock \
+    python docker/serve_env_backend.py
 
 # ターミナル2: gateway と評価ループ（シミュレータは import しない）
 python -m capx.cli.eval --taskpack taskpacks/original --mode dev \
-    --simulators robosuite --backend robosuite=127.0.0.1:8100
+    --simulators robosuite --backend robosuite=unix:$HOME/.capx/sock/robosuite.sock
 ```
 
-複数のシミュレータを使うときは、`--backend robosuite=127.0.0.1:8100 libero=127.0.0.1:8200` のように1つの `--backend` の後に並べます。LIBERO のバックエンドは専用の venv（`.venv-libero`）で動かします。BEHAVIOR は [docs/behavior-tasks.md](docs/behavior-tasks.md) を見てください。
+複数のシミュレータを使うときは、`--backend robosuite=unix:/path/robosuite.sock libero=unix:/path/libero.sock` のように1つの `--backend` の後に並べます。LIBERO のバックエンドは専用の venv（`.venv-libero`）で動かします。BEHAVIOR は [docs/behavior-tasks.md](docs/behavior-tasks.md) を見てください。
+
+gateway とバックエンドは Unix ソケットでしか待ち受けません。計算ノードは他のチームと共有されていて、ポートで待ち受けると他のチームのジョブからも接続できるためです。ソケットは自分だけが入れるディレクトリ（`$HOME` の下など、権限 `700`）に置き、`/tmp` の直下には置かないでください。ディレクトリやソケットに `chmod 777` などで他のユーザーの権限を付けないでください。
 
 ### 参照実装（CaP-Agent0）を動かす
 
@@ -69,7 +72,7 @@ CaP-Agent0（LLM の複数ターンループ、SAM3 と GraspNet による知覚
 PYTHONPATH=. python -m capx.submission.run --config-path env_configs/gateway/runner.yaml
 ```
 
-gateway には `CAPX_ENV_SOCKET` のソケット、なければ `CAPX_ENV_HOST`・`CAPX_ENV_PORT`（既定は `gateway:8000`）で接続します。タスクごとの設定（プロンプト、使う API）は `env_configs/gateway/*.yaml` にあり、`task_map` で選ばれます。必要なものは torch（CPU で可）、jax と pyroki、そして設定が参照するサーバー（vLLM、SAM3、GraspNet、PyRoKi、両腕のタスクでは OWL-ViT と SAM2）です。
+gateway には `CAPX_ENV_SOCKET` のソケット、なければ設定の `gateway_socket`（既定は `/capx/run/gateway.sock`）で接続します。タスクごとの設定（プロンプト、使う API）は `env_configs/gateway/*.yaml` にあり、`task_map` で選ばれます。必要なものは torch（CPU で可）、jax と pyroki、そして設定が参照するサーバー（vLLM、SAM3、GraspNet、PyRoKi、両腕のタスクでは OWL-ViT と SAM2）です。
 
 ### 自分のポリシーを書く
 
