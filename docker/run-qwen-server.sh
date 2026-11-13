@@ -61,7 +61,8 @@ else
     source .venv-serve/bin/activate
 fi
 
-SOCKET_DIR="${CAPX_SOCKET_DIR:-${HOME}/.capx/sockets}"
+SOCKET_DIR="$(realpath -m "${CAPX_SOCKET_DIR:-${HOME}/.capx/sockets}")"
+export CAPX_SOCKET_DIR="${SOCKET_DIR}"
 mkdir -p -m 700 "${SOCKET_DIR}"
 if [[ ! -O "${SOCKET_DIR}" ]] || (( 0$(stat -c %a "${SOCKET_DIR}") & 077 )); then
     echo "ERROR: ${SOCKET_DIR} must be owned by you with mode 700 (chmod 700 it)" >&2

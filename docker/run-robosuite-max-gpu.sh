@@ -24,7 +24,8 @@ set -euo pipefail
 CAPX_DIR="${CAPX_DIR:-/workspace/cap-x}"
 MODEL="${MODEL:-gpt-5}"
 CONFIG="${CONFIG:-env_configs/cube_stack/franka_robosuite_cube_stack_multiturn.yaml}"
-SOCKET="${CAPX_SOCKET_DIR:-${HOME}/.capx/sockets}/model.sock"
+export CAPX_SOCKET_DIR="$(realpath -m "${CAPX_SOCKET_DIR:-${HOME}/.capx/sockets}")"
+SOCKET="${CAPX_SOCKET_DIR}/model.sock"
 NUM_WORKERS="${NUM_WORKERS:-4}"
 TOTAL_TRIALS="${TOTAL_TRIALS:-4}"
 

@@ -33,7 +33,7 @@ logger = logging.getLogger(__name__)
 
 def socket_dir() -> Path:
     raw = os.environ.get(SOCKET_DIR_ENV, "").strip()
-    return Path(raw).expanduser() if raw else Path.home() / ".capx" / "sockets"
+    return Path(raw).expanduser().absolute() if raw else Path.home() / ".capx" / "sockets"
 
 
 def resolve_socket(socket_name: str) -> Path:

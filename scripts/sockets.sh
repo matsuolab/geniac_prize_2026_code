@@ -2,7 +2,7 @@
 # sockets in CAPX_SOCKET_DIR (capx/utils/unix_http.py); a socket is named by its file
 # name there, e.g. model.sock or sam3.sock.
 
-export CAPX_SOCKET_DIR="${CAPX_SOCKET_DIR:-${HOME}/.capx/sockets}"
+export CAPX_SOCKET_DIR="$(realpath -m "${CAPX_SOCKET_DIR:-${HOME}/.capx/sockets}")"
 
 # Succeeds if a server answers HTTP on socket $1, at path $2 (default /), with any status.
 sock_up() {

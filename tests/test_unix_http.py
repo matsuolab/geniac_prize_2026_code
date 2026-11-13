@@ -83,6 +83,15 @@ def test_the_socket_dir_defaults_to_home(monkeypatch: pytest.MonkeyPatch) -> Non
     assert unix_http.socket_dir() == Path.home() / ".capx" / "sockets"
 
 
+def test_a_relative_socket_dir_is_taken_from_the_working_directory(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv(unix_http.SOCKET_DIR_ENV, "sockets")
+    assert unix_http.socket_dir() == tmp_path / "sockets"
+    assert unix_http.resolve_socket("model.sock") == tmp_path / "sockets" / "model.sock"
+
+
 def test_a_socket_path_over_the_kernel_limit_is_refused() -> None:
     with pytest.raises(ValueError, match="kernel limit"):
         unix_http.resolve_socket("/" + "d" * 120 + "/model.sock")

@@ -34,7 +34,7 @@ MODEL="${CAPX_MODEL:-Qwen/Qwen3.6-27B}"
 MODEL_PATH="${CAPX_MODEL_PATH:-${MODEL}}"
 RUNNER_CONFIG="${CAPX_RUNNER_CONFIG:-env_configs/gateway/runner.yaml}"
 [[ "${RUNNER_CONFIG}" = /* ]] || RUNNER_CONFIG="/workspace/capx/${RUNNER_CONFIG}"
-export CAPX_SOCKET_DIR="${CAPX_SOCKET_DIR:-${HOME}/.capx/sockets}"
+export CAPX_SOCKET_DIR="$(realpath -m "${CAPX_SOCKET_DIR:-${HOME}/.capx/sockets}")"
 # Creates the directory 0700, refuses one other users can enter, and checks the
 # socket path fits the kernel's limit.
 MODEL_SOCKET="$(python -c '

@@ -16,7 +16,8 @@ set -euo pipefail
 CAPX_DIR="${CAPX_DIR:-/workspace/cap-x}"
 MODEL="${MODEL:-gpt-5}"
 CONFIG="${CONFIG:-env_configs/cube_stack/franka_robosuite_cube_stack_smoke.yaml}"
-SOCKET="${CAPX_SOCKET_DIR:-${HOME}/.capx/sockets}/model.sock"
+export CAPX_SOCKET_DIR="$(realpath -m "${CAPX_SOCKET_DIR:-${HOME}/.capx/sockets}")"
+SOCKET="${CAPX_SOCKET_DIR}/model.sock"
 
 if [[ -z "${OPENAI_API_KEY:-}" ]] && [[ ! -f "${CAPX_DIR}/.openaikey" ]]; then
     echo "ERROR: need OPENAI_API_KEY env var or ${CAPX_DIR}/.openaikey file" >&2
