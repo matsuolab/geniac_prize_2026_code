@@ -7,7 +7,7 @@ import socket
 import threading
 from collections.abc import Mapping
 from typing import Any
-from urllib.parse import unquote, urlsplit
+from urllib.parse import unquote, urljoin, urlsplit
 
 import requests
 from requests.adapters import HTTPAdapter
@@ -85,8 +85,19 @@ class UnixSocketAdapter(HTTPAdapter):
             self._unix_pools.clear()
 
 
+class _CheckedRedirectSession(requests.Session):
+    """Follows a redirect only to a URL :func:`check_server_url` allows, so a server
+    cannot send a request body on over plain TCP."""
+
+    def get_redirect_target(self, resp: requests.Response) -> str | None:
+        target = super().get_redirect_target(resp)
+        if target is not None:
+            check_server_url(urljoin(resp.url, target))
+        return target
+
+
 def new_session() -> requests.Session:
-    session = requests.Session()
+    session = _CheckedRedirectSession()
     session.mount(f"{SCHEME}://", UnixSocketAdapter())
     return session
 

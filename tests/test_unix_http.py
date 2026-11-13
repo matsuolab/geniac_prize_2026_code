@@ -220,6 +220,14 @@ def _echo_app():  # noqa: ANN202
     def health() -> dict:
         return {"status": "ok"}
 
+    @app.post("/to-tcp")
+    def to_tcp():  # noqa: ANN202
+        return fastapi.responses.RedirectResponse("http://127.0.0.1:9/echo", status_code=307)
+
+    @app.post("/to-socket")
+    def to_socket():  # noqa: ANN202
+        return fastapi.responses.RedirectResponse("http+unix://echo.sock/echo", status_code=307)
+
     @app.post("/chat/completions")
     def chat(body: dict) -> dict:
         message = {"role": "assistant", "content": f"hello from {body['model']}"}
@@ -255,6 +263,15 @@ def echo_server(socket_dir: Path) -> Iterator[Path]:
     path = socket_dir / "echo.sock"
     _wait_for(path)
     yield path
+
+
+def test_a_redirect_is_followed_only_to_an_allowed_url(echo_server: Path) -> None:
+    from capx.utils import unix_http_client
+
+    with pytest.raises(ValueError, match="not allowed"):
+        unix_http_client.post("http+unix://echo.sock/to-tcp", json={"a": 1}, timeout=5)
+    reply = unix_http_client.post("http+unix://echo.sock/to-socket", json={"a": 1}, timeout=5)
+    assert reply.json() == {"got": {"a": 1}}
 
 
 def test_a_client_reaches_a_uvicorn_server_over_its_socket(echo_server: Path) -> None:
