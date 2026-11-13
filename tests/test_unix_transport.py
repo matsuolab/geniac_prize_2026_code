@@ -6,6 +6,7 @@ be reachable only by their owner.
 
 from __future__ import annotations
 
+import importlib
 import os
 import stat
 
@@ -62,3 +63,20 @@ def test_env_backend_over_a_unix_socket(tmp_path) -> None:
             np.testing.assert_allclose(result.obs.joint_pos[:7], VALID_JOINTS, atol=1e-4)
     finally:
         backend.close()
+
+
+def test_a_backend_hands_only_a_socket_directory_it_created_to_the_owner(tmp_path) -> None:
+    serve_env_backend = importlib.import_module("docker.serve_env_backend")
+    uid, gid = os.getuid(), os.getgid()
+
+    created = tmp_path / "new" / "be.sock"
+    serve_env_backend._make_socket_dir_for(str(created), uid, gid)
+    info = os.stat(created.parent)
+    assert (info.st_uid, info.st_gid) == (uid, gid)
+    assert stat.S_IMODE(info.st_mode) == 0o700
+
+    existing = tmp_path / "shared"
+    existing.mkdir(mode=0o755)
+    existing.chmod(0o755)
+    serve_env_backend._make_socket_dir_for(str(existing / "be.sock"), uid, gid)
+    assert stat.S_IMODE(os.stat(existing).st_mode) == 0o755
