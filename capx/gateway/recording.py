@@ -55,6 +55,7 @@ class Recorder:
         self.fps = fps
         self._writer = ThreadPoolExecutor(max_workers=1, thread_name_prefix="recording")
         self._pending: list[Future[None]] = []
+        self._closed = False
         self._lock = threading.Lock()
 
     def wants(self, task_id: str, trial_index: int) -> bool:
@@ -67,13 +68,17 @@ class Recorder:
         outcome = "success" if success else "fail"
         path = self._out_dir / spec.simulator / f"{spec.task_id}__trial{trial_index}__{outcome}.mp4"
         with self._lock:
+            if self._closed:
+                _logger.warning("dropped the recording %s: the gateway is shutting down", path)
+                return
             self._pending.append(self._writer.submit(self._write, path, frames))
 
     def close(self, timeout_s: float | None = None) -> bool:
         """Wait for the videos queued so far. False if some were still being written."""
         with self._lock:
+            self._closed = True
             pending, self._pending = self._pending, []
-        self._writer.shutdown(wait=False)
+            self._writer.shutdown(wait=False)
         return not wait(pending, timeout=timeout_s).not_done
 
     def _write(self, path: Path, frames: list[bytes]) -> None:

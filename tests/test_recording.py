@@ -196,3 +196,11 @@ def test_supervise_passes_no_recordings_to_the_worker(tmp_path: Path, monkeypatc
     slurm.submit_worker(config, tmp_path)
     assert "--no-recordings" in commands[0]
     assert "--no-recordings" not in commands[1]
+
+
+def test_a_save_after_close_is_dropped_not_raised(tmp_path: Path) -> None:
+    recorder = Recorder(tmp_path, {("t", 0)})
+    assert recorder.close(1.0)
+    spec = make_tasks()["t"]
+    recorder.save(spec, 0, False, [encode_jpeg(np.zeros((8, 8, 3), np.uint8))])
+    assert not any(tmp_path.iterdir())

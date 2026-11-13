@@ -330,7 +330,10 @@ class GatewaySession:
             _logger.exception("could not fetch the recording of episode %s", episode.episode_id)
             return
         success = self._shared.scoring.succeeded(episode.episode_id)
-        recorder.save(active.spec, episode.trial_index, success, frames)
+        try:
+            recorder.save(active.spec, episode.trial_index, success, frames)
+        except Exception:
+            _logger.exception("could not save the recording of episode %s", episode.episode_id)
 
     def _step_obs(self, active: _Active, action: RawAction) -> ProprioObs | FullObs:
         if action.include_cameras:
