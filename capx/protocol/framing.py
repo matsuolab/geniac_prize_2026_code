@@ -1,6 +1,9 @@
 """Blocking length-framed msgpack (4-byte big-endian length + msgpack, string keys),
-and the TCP / AF_UNIX stream sockets both framed links run on (submission<->gateway,
+and the AF_UNIX stream sockets both framed links run on (submission<->gateway,
 gateway<->env backend).
+
+There is no TCP option: on a shared node loopback is reachable from every other
+user's jobs, whereas a 0600 socket in a private directory is not.
 
 Numpy arrays travel in msgpack-numpy's layout, so a peer using msgpack-numpy can
 still read and write them. Decoding is our own: msgpack-numpy unpickles object
@@ -176,47 +179,33 @@ def check_unix_path(path: str) -> str:
     return path
 
 
-def bind_stream_socket(
-    *, host: str = "127.0.0.1", port: int = 0, unix_path: str | None = None
-) -> tuple[socket.socket, str, int]:
-    """Bind + listen on a TCP or AF_UNIX stream socket.
-
-    Returns the socket and a printable address; for a Unix socket the path takes
-    the host slot and the port is 0.
-    """
-    if unix_path is None:
-        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        sock.bind((host, port))
-        sock.listen()
-        bound_host, bound_port = sock.getsockname()
-        return sock, bound_host, bound_port
-
-    check_unix_path(unix_path)
-    parent = os.path.dirname(unix_path)
+def bind_unix_socket(path: str) -> socket.socket:
+    """Bind + listen on an AF_UNIX stream socket that only its owner can connect to."""
+    check_unix_path(path)
+    parent = os.path.dirname(path)
     if parent:
-        os.makedirs(parent, exist_ok=True)
+        os.makedirs(parent, mode=0o700, exist_ok=True)
     # A socket file left behind by a crashed run makes bind() fail with EADDRINUSE.
     # Only ever unlink an actual socket, so a mistyped path can't delete real data.
     with contextlib.suppress(FileNotFoundError):
-        if stat.S_ISSOCK(os.stat(unix_path).st_mode):
-            os.unlink(unix_path)
+        if stat.S_ISSOCK(os.stat(path).st_mode):
+            os.unlink(path)
     sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-    sock.bind(unix_path)
-    os.chmod(unix_path, 0o600)
+    sock.bind(path)
+    os.chmod(path, 0o600)
     sock.listen()
-    return sock, unix_path, 0
+    return sock
 
 
-def connect_stream_socket(
-    *, host: str = "", port: int = 0, unix_path: str | None = None
-) -> socket.socket:
-    """Dial the TCP or AF_UNIX counterpart of :func:`bind_stream_socket`."""
-    if unix_path is None:
-        return socket.create_connection((host, port))
-    check_unix_path(unix_path)
+def connect_unix_socket(path: str) -> socket.socket:
+    """Dial the counterpart of :func:`bind_unix_socket`."""
+    check_unix_path(path)
     sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-    sock.connect(unix_path)
+    try:
+        sock.connect(path)
+    except BaseException:
+        sock.close()
+        raise
     return sock
 
 
@@ -229,6 +218,6 @@ __all__ = [
     "send_framed",
     "recv_framed",
     "check_unix_path",
-    "bind_stream_socket",
-    "connect_stream_socket",
+    "bind_unix_socket",
+    "connect_unix_socket",
 ]

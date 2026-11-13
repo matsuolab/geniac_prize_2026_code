@@ -335,12 +335,12 @@ def test_an_action_that_is_not_a_map_is_an_invalid_action(bad: object) -> None:
 
 
 def test_an_action_that_is_not_a_map_is_an_invalid_action_over_the_socket() -> None:
-    from test_http_transport import serve
+    from test_socket_transport import serve
 
-    from capx.protocol import HttpTransport
+    from capx.protocol import UnixTransport
 
     server = serve()
-    transport = HttpTransport(server.host, server.port)
+    transport = UnixTransport(server.path)
     try:
         ep = transport.call("reset", {"task_id": "t"})["episode_id"]
         for bad in (None, [0.0] * 8):

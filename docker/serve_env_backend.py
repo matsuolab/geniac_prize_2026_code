@@ -11,13 +11,13 @@ Env vars:
 - ``CAPX_TASKPACK`` — the pack directory, when the pack ships its own envs. Its
   ``register_modules`` for this simulator are imported here, since this is the
   process that builds them.
-- ``CAPX_BACKEND_HOST`` / ``CAPX_BACKEND_PORT`` — TCP bind address (gateway-facing).
-- ``CAPX_BACKEND_UNIX`` — bind an AF_UNIX socket at this path instead of TCP. The
-  eval queue uses this: on a shared Slurm node loopback is visible to every other
-  job on the box, whereas a socket in a run-private directory is not.
-- ``CAPX_BACKEND_UNIX_OWNER`` — ``uid:gid`` to hand the socket to. The socket is
-  0600, so a backend running as root in Docker must give it to the user whose ssh
-  forwards it to the gateway (the eval queue's remote backends).
+- ``CAPX_BACKEND_UNIX`` (required) — AF_UNIX path of the gateway-facing socket. There
+  is no TCP option: on a shared node any port is reachable by other users' jobs,
+  whereas a socket in a run-private directory is not.
+- ``CAPX_BACKEND_UNIX_OWNER`` — ``uid:gid`` to hand the socket to, along with its
+  directory when the backend has to create it. The socket is 0600 and a directory
+  created for it 0700, so a backend running as root in Docker must give them to the
+  user whose ssh forwards it to the gateway (the eval queue's remote backends).
 """
 
 from __future__ import annotations
@@ -55,6 +55,18 @@ def _factory_kind(simulator: str, factory: str) -> Simulator:
         ) from None
 
 
+def _make_socket_dir_for(unix_path: str, uid: int, gid: int) -> None:
+    """Create the socket's missing directory 0700 and hand it to ``uid:gid``.
+
+    An existing directory is left alone: chowning it (say /tmp) would give the
+    owner someone else's directory.
+    """
+    parent = os.path.dirname(unix_path)
+    if parent and not os.path.isdir(parent):
+        os.makedirs(parent, mode=0o700)
+        os.chown(parent, uid, gid)
+
+
 def main() -> None:
     os.environ.setdefault("MUJOCO_GL", "egl")
     simulator = os.environ.get("CAPX_SIMULATOR", "robosuite")
@@ -62,17 +74,16 @@ def main() -> None:
     taskpack = os.environ.get("CAPX_TASKPACK", "").strip()
     if taskpack:
         import_pack_modules(taskpack, simulator)
-    host = os.environ.get("CAPX_BACKEND_HOST", "0.0.0.0")
-    port = int(os.environ.get("CAPX_BACKEND_PORT", "8100"))
-
-    unix_path = os.environ.get("CAPX_BACKEND_UNIX", "").strip() or None
-    server = EnvBackendServer(
-        _local_factory(kind), host=host, port=port, unix_path=unix_path
-    )
+    unix_path = os.environ.get("CAPX_BACKEND_UNIX", "").strip()
+    if not unix_path:
+        raise SystemExit("CAPX_BACKEND_UNIX is required: backends listen only on a Unix socket")
     owner = os.environ.get("CAPX_BACKEND_UNIX_OWNER", "").strip()
-    if unix_path is not None and owner:
-        uid, gid = (int(part) for part in owner.split(":"))
-        os.chown(unix_path, uid, gid)
+    owner_ids = tuple(int(part) for part in owner.split(":")) if owner else None
+    if owner_ids is not None:
+        _make_socket_dir_for(unix_path, *owner_ids)
+    server = EnvBackendServer(_local_factory(kind), unix_path)
+    if owner_ids is not None:
+        os.chown(unix_path, *owner_ids)
     print(f"env backend ({simulator}) serving on {server.address}", flush=True)
     server.serve_forever()
 

@@ -8,7 +8,7 @@ the expected attribution exact rather than approximate.
 
 from __future__ import annotations
 
-from test_http_transport import CAMERA, VALID_JOINTS, FakeEnv, make_tasks
+from test_socket_transport import CAMERA, VALID_JOINTS, FakeEnv, make_tasks
 
 from capx.gateway import EnforcementMode, Gateway
 from capx.gateway.low_level import StepOutcome

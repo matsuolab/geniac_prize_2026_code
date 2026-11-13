@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
-from test_http_transport import VALID_JOINTS, make_tasks
+from test_socket_transport import VALID_JOINTS, make_tasks
 
 from capx.gateway import EnforcementMode, Gateway, StepOutcome
 from capx.protocol import (

@@ -91,8 +91,6 @@ From: nvidia/cuda:12.4.1-runtime-ubuntu22.04
     export PYTHONPATH=/workspace/capx
     export MUJOCO_GL=egl
     export CAPX_SIMULATOR=robosuite
-    export CAPX_BACKEND_HOST=127.0.0.1
-    export CAPX_BACKEND_PORT=8100
 
 %runscript
     cd /workspace/capx

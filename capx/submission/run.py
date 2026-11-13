@@ -21,8 +21,7 @@ class SubmissionArgs:
     """Overrides of the ``SubmissionConfig`` fields of the same name; unset keeps the YAML."""
 
     config_path: str = str(GATEWAY_CONFIG_DIR / "runner.yaml")
-    gateway_host: str | None = None
-    gateway_port: int | None = None
+    gateway_socket: str | None = None
     model: str | None = None
     server_url: str | None = None
     trials_per_task: int | None = None

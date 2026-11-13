@@ -1,7 +1,7 @@
 """3-tier seam: Gateway -> RemoteEnvFactory -> EnvBackendServer over a socket.
 
 Proves the gateway can drive a simulator hosted in a separate backend (here a fake
-in a thread over the loopback socket) without importing the sim, keeping
+in a thread over a Unix socket) without importing the sim, keeping
 referee / ObsFilter / scoring central. Reuses the same fake as the in-process
 gateway tests, so equivalence to the in-process path is direct.
 """
@@ -32,8 +32,9 @@ from capx.protocol import (
     InProcessTransport,
     ProprioObs,
 )
-from capx.protocol.framing import connect_stream_socket, recv_framed, send_framed
+from capx.protocol.framing import connect_unix_socket, recv_framed, send_framed
 from capx.protocol.taskpack import SeedPolicy, TaskSpec
+from socket_paths import fresh_socket_path
 from test_gateway import (
     CAMERA,
     VALID_JOINTS,
@@ -46,7 +47,7 @@ from test_gateway import (
 
 
 def backend(**env_kwargs) -> EnvBackendServer:
-    return EnvBackendServer(FakeFactory(**env_kwargs)).start_background()
+    return EnvBackendServer(FakeFactory(**env_kwargs), fresh_socket_path()).start_background()
 
 
 def gateway_over(server: EnvBackendServer, mode=EnforcementMode.DEV, **kw):
@@ -90,7 +91,7 @@ def test_remote_scores_success_internally() -> None:
 
 
 def test_remote_success_inside_a_repeat_counts() -> None:
-    server = EnvBackendServer(FleetingSuccessFactory()).start_background()
+    server = EnvBackendServer(FleetingSuccessFactory(), fresh_socket_path()).start_background()
     try:
         client, gw = gateway_over(server)
         reset = client.reset("t")
@@ -102,7 +103,7 @@ def test_remote_success_inside_a_repeat_counts() -> None:
 
 class CountingBackend(EnvBackendServer):
     def __init__(self, factory) -> None:  # noqa: ANN001
-        super().__init__(factory)
+        super().__init__(factory, fresh_socket_path())
         self.calls: list[str] = []
 
     def _dispatch(self, request, env):  # noqa: ANN001
@@ -185,27 +186,19 @@ def test_routes_multiple_simulators_in_one_run() -> None:
         lib.close()
 
 
-def _unused_port() -> int:
-    with socket.socket() as probe:
-        probe.bind(("127.0.0.1", 0))
-        return probe.getsockname()[1]
-
-
 def test_a_backend_that_is_still_starting_is_waited_for() -> None:
     # A simulator backend binds only once its imports finish (~15 s for BEHAVIOR);
     # a submission that resets first must not get an env_crash for it.
-    port = _unused_port()
+    path = fresh_socket_path()
     servers: list[EnvBackendServer] = []
 
     def start_late() -> None:
-        servers.append(
-            EnvBackendServer(FakeFactory(), host="127.0.0.1", port=port).start_background()
-        )
+        servers.append(EnvBackendServer(FakeFactory(), path).start_background())
 
     timer = threading.Timer(1.0, start_late)
     timer.start()
     try:
-        routes = {"robosuite": [BackendAddress("127.0.0.1", port)]}
+        routes = {"robosuite": [BackendAddress(path)]}
         gw = Gateway(make_tasks(), RemoteEnvFactory(routes), EnforcementMode.DEV)
         reset = EnvClient(InProcessTransport(gw.acquire())).reset("t")
         assert isinstance(reset.obs, FullObs)
@@ -216,20 +209,28 @@ def test_a_backend_that_is_still_starting_is_waited_for() -> None:
 
 
 def test_a_backend_that_never_listens_still_fails() -> None:
-    routes = {"robosuite": [BackendAddress("127.0.0.1", _unused_port())]}
+    routes = {"robosuite": [BackendAddress(fresh_socket_path())]}
     factory = RemoteEnvFactory(routes, start_timeout_s=0.5)
-    with pytest.raises(ConnectionRefusedError):
+    with pytest.raises(FileNotFoundError):
         factory.build(make_tasks()["t"])
 
 
 def test_parse_backend_routes() -> None:
-    routes = parse_backend_routes(["robosuite=127.0.0.1:8100", "libero=env-libero:8100"])
+    routes = parse_backend_routes(
+        ["robosuite=unix:/run/a.sock", "robosuite=unix:/run/b.sock", "libero=unix:/run/c.sock"]
+    )
     assert routes == {
-        "robosuite": [BackendAddress("127.0.0.1", 8100)],
-        "libero": [BackendAddress("env-libero", 8100)],
+        "robosuite": [BackendAddress("/run/a.sock"), BackendAddress("/run/b.sock")],
+        "libero": [BackendAddress("/run/c.sock")],
     }
     with pytest.raises(ValueError, match="bad backend spec"):
         parse_backend_routes(["robosuite"])
+
+
+@pytest.mark.parametrize("spec", ["robosuite=127.0.0.1:8100", "robosuite=env-robosuite:8100"])
+def test_parse_backend_routes_rejects_tcp_addresses(spec: str) -> None:
+    with pytest.raises(ValueError, match="only on Unix sockets"):
+        parse_backend_routes([spec])
 
 
 def test_a_live_env_holds_its_backend_against_the_next_build() -> None:
@@ -264,13 +265,13 @@ def test_an_on_demand_backend_is_asked_for_before_the_first_connection(tmp_path)
         want = tmp_path / "robosuite-0.sock.want"
         while not want.exists():
             time.sleep(0.01)
-        started.append(EnvBackendServer(FakeFactory(), unix_path=str(sock)).start_background())
+        started.append(EnvBackendServer(FakeFactory(), str(sock)).start_background())
 
     starter = threading.Thread(target=start_when_asked)
     starter.start()
     try:
         factory = RemoteEnvFactory(
-            {"robosuite": [BackendAddress(unix_path=str(sock))]},
+            {"robosuite": [BackendAddress(str(sock))]},
             on_demand=True,
             start_timeout_s=10,
         )
@@ -302,7 +303,7 @@ def _reset_within(client: EnvClient, seconds: float) -> None:
 def test_a_crash_in_the_first_reset_gives_the_backend_back() -> None:
     """Before the fix the new env was never closed, its lease never came back, and the
     lane's next reset on that simulator waited forever."""
-    server = EnvBackendServer(CrashFirstResetFactory()).start_background()
+    server = EnvBackendServer(CrashFirstResetFactory(), fresh_socket_path()).start_background()
     try:
         factory = RemoteEnvFactory({"robosuite": [server.address]})
         gw = Gateway(make_tasks(), factory, EnforcementMode.OFFICIAL)
@@ -372,7 +373,7 @@ def test_a_backend_that_stops_answering_is_held_until_its_call_ends() -> None:
     may be built beside it (BEHAVIOR keeps one env per process) until it is done."""
     release = threading.Event()
     sim = HangFirstResetFactory(release)
-    server = EnvBackendServer(sim).start_background()
+    server = EnvBackendServer(sim, fresh_socket_path()).start_background()
     try:
         factory = RemoteEnvFactory(
             {"robosuite": [server.address]}, call_timeout_s=0.3, lease_timeout_s=0.3
@@ -401,7 +402,7 @@ def test_a_backend_that_stops_answering_is_held_until_its_call_ends() -> None:
 def test_a_backend_that_is_gone_goes_back_to_the_pool_at_once() -> None:
     """A backend process that exited is restarted by the runner when next asked for,
     so there is nothing to wait for."""
-    address = BackendAddress("127.0.0.1", _unused_port())
+    address = BackendAddress(fresh_socket_path())
     factory = RemoteEnvFactory({"robosuite": [address]})
     factory._take("robosuite", [address])
 
@@ -413,11 +414,11 @@ def test_a_backend_that_is_gone_goes_back_to_the_pool_at_once() -> None:
 def test_a_backend_serves_one_connection_at_a_time() -> None:
     server = backend()
     try:
-        first = connect_stream_socket(host=server.host, port=server.port)
+        first = connect_unix_socket(server.address.path)
         send_framed(first, {"method": "build", "payload": {"spec": make_tasks()["t"].model_dump(mode="json")}})
         assert recv_framed(first)["ok"] is True
 
-        second = connect_stream_socket(host=server.host, port=server.port)
+        second = connect_unix_socket(server.address.path)
         second.settimeout(0.3)
         send_framed(second, {"method": "ping", "payload": {}})
         with pytest.raises(TimeoutError):

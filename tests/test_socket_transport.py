@@ -1,6 +1,6 @@
-"""The same EnvClient over HttpTransport behaves like in-process.
+"""The same EnvClient over UnixTransport behaves like in-process.
 
-Runs a GatewayServer in a background thread on an ephemeral port and drives it through
+Runs a GatewayServer in a background thread on a Unix socket and drives it through
 framed msgpack. Confirms reset/step/get_obs work over the socket and that a gateway
 error crosses the wire with its original ErrorCode.
 """
@@ -18,11 +18,12 @@ from capx.protocol import (
     FrankaRawAction,
     FullObs,
     GatewayError,
-    HttpTransport,
     InProcessTransport,
     ProprioObs,
+    UnixTransport,
 )
 from capx.protocol.taskpack import SeedPolicy, TaskSpec
+from socket_paths import fresh_socket_path
 
 CAMERA = "robot0_robotview"
 VALID_JOINTS = np.array([0.0, -0.5, 0.0, -2.0, 0.0, 1.5, 0.0])  # within Panda limits
@@ -93,12 +94,12 @@ def make_tasks(n_trials: int = 2) -> dict[str, TaskSpec]:
 
 def serve(mode=EnforcementMode.DEV, n_trials=2) -> GatewayServer:
     gateway = Gateway(make_tasks(n_trials), FakeFactory(), mode)
-    return GatewayServer(gateway).start_background()
+    return GatewayServer(gateway, fresh_socket_path()).start_background()
 
 
-def test_http_reset_step_get_obs() -> None:
+def test_socket_reset_step_get_obs() -> None:
     server = serve()
-    client = EnvClient(HttpTransport(server.host, server.port))
+    client = EnvClient(UnixTransport(server.path))
     try:
         reset = client.reset("t")
         assert isinstance(reset.obs, FullObs)
@@ -114,9 +115,9 @@ def test_http_reset_step_get_obs() -> None:
         server.close()
 
 
-def test_http_matches_inprocess_for_the_same_action() -> None:
+def test_socket_matches_inprocess_for_the_same_action() -> None:
     server = serve()
-    http = EnvClient(HttpTransport(server.host, server.port))
+    http = EnvClient(UnixTransport(server.path))
     inproc = EnvClient(
         InProcessTransport(Gateway(make_tasks(), FakeFactory(), EnforcementMode.DEV).acquire())
     )
@@ -129,9 +130,9 @@ def test_http_matches_inprocess_for_the_same_action() -> None:
         server.close()
 
 
-def test_http_propagates_gateway_error() -> None:
+def test_socket_propagates_gateway_error() -> None:
     server = serve(EnforcementMode.OFFICIAL, n_trials=1)
-    client = EnvClient(HttpTransport(server.host, server.port))
+    client = EnvClient(UnixTransport(server.path))
     try:
         client.reset("t")
         with pytest.raises(GatewayError) as exc:
@@ -143,7 +144,7 @@ def test_http_propagates_gateway_error() -> None:
 
 def test_malformed_action_over_the_wire_is_invalid_action() -> None:
     server = serve()
-    transport = HttpTransport(server.host, server.port)
+    transport = UnixTransport(server.path)
     try:
         ep = EnvClient(transport).reset("t").episode_id
         with pytest.raises(GatewayError) as exc:
@@ -158,7 +159,7 @@ def test_malformed_action_over_the_wire_is_invalid_action() -> None:
 
 def test_noncoded_errors_match_across_transports() -> None:
     server = serve()
-    http = EnvClient(HttpTransport(server.host, server.port))
+    http = EnvClient(UnixTransport(server.path))
     inproc = EnvClient(
         InProcessTransport(Gateway(make_tasks(), FakeFactory(), EnforcementMode.DEV).acquire())
     )

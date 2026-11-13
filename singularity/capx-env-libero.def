@@ -126,8 +126,6 @@ From: nvidia/cuda:12.4.1-runtime-ubuntu22.04
     export MUJOCO_GL=egl
     export LIBERO_CONFIG_PATH=/opt/libero-config
     export CAPX_SIMULATOR=libero
-    export CAPX_BACKEND_HOST=127.0.0.1
-    export CAPX_BACKEND_PORT=8100
 
 %runscript
     cd /workspace/capx

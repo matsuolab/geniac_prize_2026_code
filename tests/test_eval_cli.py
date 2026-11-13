@@ -8,6 +8,7 @@ import pytest
 
 from capx.cli.eval import EvalArgs, _build_factory, main
 from capx.gateway.env_backend import EnvBackendServer
+from socket_paths import fresh_socket_path
 from test_gateway import CAMERA, FakeFactory, make_tasks
 
 
@@ -39,7 +40,7 @@ def test_build_factory_rejects_in_process_for_non_robosuite_pack() -> None:
 
 def test_build_factory_needs_a_route_for_every_simulator() -> None:
     with pytest.raises(SystemExit, match="no --backend route"):
-        _build_factory(["libero=127.0.0.1:9"], make_tasks())
+        _build_factory(["libero=unix:/run/libero.sock"], make_tasks())
 
 
 def _write_multi_sim_taskpack(tmp_path) -> str:
@@ -69,13 +70,13 @@ def _write_multi_sim_taskpack(tmp_path) -> str:
 
 
 def test_eval_cli_simulators_filter_selects_a_subset(tmp_path, capsys) -> None:
-    b = EnvBackendServer(FakeFactory(solve_at_cycle=1)).start_background()
+    b = EnvBackendServer(FakeFactory(solve_at_cycle=1), fresh_socket_path()).start_background()
     try:
         main(
             EvalArgs(
                 taskpack=_write_multi_sim_taskpack(tmp_path),
                 mode="dev",
-                backend=[f"robosuite={b.host}:{b.port}"],
+                backend=[f"robosuite=unix:{b.address.path}"],
                 simulators=["robosuite"],
                 max_steps=2,
             )
