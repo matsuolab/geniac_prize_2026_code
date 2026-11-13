@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import logging
 import os
 import time
 from dataclasses import dataclass, field
@@ -16,6 +15,7 @@ from capx.evalqueue.hubsource import HubWeights
 from capx.evalqueue.models import QueueJob, Rejected, RunSpec, WeightsMount
 from capx.evalqueue.queue import FileQueue
 from capx.evalqueue.store import EvalStore, utcnow
+from capx.evalqueue import watcher as watcher_module
 from capx.evalqueue.watcher import SubmissionWatcher
 from capx.evalqueue.weights import RepoInfo, WeightsCache, prune_weights
 
@@ -98,6 +98,27 @@ def test_a_gated_repo_must_be_declared_gated(store) -> None:
     with pytest.raises(Rejected, match="declare `gated: true`"):
         cache.check("alpha", [mount()])
     cache.check("alpha", [mount(gated=True)])
+
+
+def test_check_returns_the_gated_repos_that_cannot_be_downloaded_yet(store) -> None:
+    fetcher = FakeFetcher(gated={"org/model", "org/open"}, ungranted={"org/model"})
+    cache = WeightsCache(store, fetcher, max_gb=0)
+    waiting = mount(gated=True)
+    granted = mount(repo="org/open", path="/models/o", gated=True)
+    assert cache.check("alpha", [waiting, granted]) == [waiting]
+
+
+def test_fetch_missing_fetches_only_what_can_be_downloaded(store) -> None:
+    fetcher = FakeFetcher(ungranted={"org/model"})
+    cache = WeightsCache(store, fetcher, max_gb=0)
+    waiting, ready = mount(gated=True), mount(repo="org/open", path="/models/o")
+
+    assert cache.fetch_missing([waiting, ready]) == [waiting]
+    assert fetcher.downloaded == ["org/open"]
+
+    fetcher.ungranted.clear()
+    assert cache.fetch_missing([waiting, ready]) == []
+    assert fetcher.downloaded == ["org/open", "org/model"]
 
 
 def test_declared_weights_over_the_cap_are_refused(store) -> None:
@@ -242,14 +263,27 @@ def test_prune_leaves_anything_it_did_not_lay_out(store) -> None:
 # --- the watcher --------------------------------------------------------------
 
 
+@dataclass
+class RecordingNotifier:
+    sent: list[str] = field(default_factory=list)
+
+    def notify(self, text: str) -> None:
+        self.sent.append(text)
+
+
 @pytest.fixture
-def watched(store):
+def notifier() -> RecordingNotifier:
+    return RecordingNotifier()
+
+
+@pytest.fixture
+def watched(store, notifier):
     config = QueueConfig(root=str(store.root), master_seed=1)
     queue = FileQueue(store)
     source = FakeSource(store)
     fetcher = FakeFetcher()
     watcher = SubmissionWatcher(
-        config, store, queue, source, WeightsCache(store, fetcher, max_gb=1)
+        config, store, queue, source, WeightsCache(store, fetcher, max_gb=1), notifier=notifier
     )
     return store, queue, source, fetcher, watcher
 
@@ -275,13 +309,76 @@ def test_weights_refused_from_metadata_cost_no_image_transfer(watched) -> None:
     assert fetcher.downloaded == []
 
 
-def test_a_declared_gated_repo_is_called_out_for_an_organizer(watched, caplog) -> None:
-    _, _, source, fetcher, watcher = watched
+def test_a_gated_repo_already_granted_is_fetched_without_a_notice(watched, notifier) -> None:
+    store, _, source, fetcher, watcher = watched
     fetcher.gated.add("org/model")
     source.offer(weights=[mount(gated=True)])
-    with caplog.at_level(logging.WARNING):
-        assert watcher.poll() == ["alpha__s1"]
-    assert "declares gated weights org/model" in caplog.text
+    assert watcher.poll() == ["alpha__s1"]
+    assert store.weights_dir(mount()).is_dir()
+    assert notifier.sent == []
+
+
+def test_a_gated_repo_without_access_is_queued_in_order_and_announced(watched, notifier) -> None:
+    """Waiting for a person to accept the terms must not cost the team its place."""
+    store, queue, source, fetcher, watcher = watched
+    fetcher.gated.add("org/model")
+    fetcher.ungranted.add("org/model")
+    source.offer(weights=[mount(gated=True)])
+    source.offer(team_id="beta", key="s1")
+
+    assert watcher.poll() == ["alpha__s1", "beta__s1"]
+
+    assert [job.job_id for job in queue.pending_jobs()] == ["alpha__s1", "beta__s1"]
+    assert not store.weights_dir(mount()).exists()
+    assert source.fetched  # the image is fetched as usual
+    (notice,) = notifier.sent
+    assert "alpha__s1" in notice and "org/model" in notice
+    assert list(store.results.glob("*.json")) == []
+
+
+def test_weights_granted_later_are_fetched_on_a_later_poll(watched, notifier) -> None:
+    store, _, source, fetcher, watcher = watched
+    fetcher.gated.add("org/model")
+    fetcher.ungranted.add("org/model")
+    source.offer(weights=[mount(gated=True)])
+    watcher.poll()
+    watcher.poll()
+    assert not store.weights_dir(mount()).exists()
+
+    fetcher.ungranted.clear()
+    watcher.poll()
+
+    assert store.weights_dir(mount()).is_dir()
+    assert len(notifier.sent) == 1  # waiting in line is not worth a second notice
+
+
+def test_a_running_job_still_waiting_for_weights_stops_the_queue_loudly(
+    watched, notifier, monkeypatch
+) -> None:
+    store, queue, source, fetcher, watcher = watched
+    fetcher.gated.add("org/model")
+    fetcher.ungranted.add("org/model")
+    source.offer(weights=[mount(gated=True)])
+    watcher.poll()
+    assert queue.claim("w1") is not None
+    clock = [1000.0]
+    monkeypatch.setattr(watcher_module.time, "monotonic", lambda: clock[0])
+
+    watcher.poll()
+    watcher.poll()
+    stopped = [text for text in notifier.sent if "queue is stopped" in text]
+    assert len(stopped) == 1 and "alpha__s1" in stopped[0]
+
+    clock[0] += watcher_module.STALLED_REMINDER_S
+    watcher.poll()
+    assert sum("queue is stopped" in text for text in notifier.sent) == 2
+
+    fetcher.ungranted.clear()
+    watcher.poll()
+    assert store.weights_dir(mount()).is_dir()
+    clock[0] += watcher_module.STALLED_REMINDER_S
+    watcher.poll()
+    assert sum("queue is stopped" in text for text in notifier.sent) == 2
 
 
 # --- the Hub fetcher ----------------------------------------------------------
@@ -328,7 +425,7 @@ def test_the_hub_fetcher_reports_size_gating_and_visibility() -> None:
     assert HubWeights(HubConfig(), api=FakeHubApi(private=None)).describe(mount()).private
 
 
-def test_a_gated_repo_the_organizer_cannot_read_is_refused_before_download() -> None:
+def test_a_gated_repo_the_organizer_cannot_read_is_reported_not_refused() -> None:
     fetcher = HubWeights(HubConfig(), api=FakeHubApi(gated="manual", granted=False))
-    with pytest.raises(Rejected, match="has not been granted access to gated repo org/model"):
-        fetcher.describe(mount(gated=True))
+    assert not fetcher.describe(mount(gated=True)).accessible
+    assert HubWeights(HubConfig(), api=FakeHubApi(gated="manual")).describe(mount()).accessible

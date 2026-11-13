@@ -33,6 +33,7 @@ from capx.evalqueue.config import QueueConfig, load_queue_config
 from capx.evalqueue.hubsource import HubSource, HubWeights, sha256_of
 from capx.evalqueue.limits import check_image_size, check_sha256
 from capx.evalqueue.models import GB, Rejected, RunResult, RunSpec
+from capx.evalqueue.notify import notifier_from_env
 from capx.evalqueue.queue import FileQueue, new_job
 from capx.evalqueue.ranking import RankingBook, queue_ranking_runs
 from capx.evalqueue.runner import EvalRunner
@@ -155,7 +156,9 @@ def _hub_source(config: QueueConfig, store: EvalStore) -> HubSource:
 def watch(args: WatchArgs) -> None:
     config, store, queue = _setup(args)
     source = _hub_source(config, store)
-    watcher = SubmissionWatcher(config, store, queue, source, _weights_cache(config, store))
+    watcher = SubmissionWatcher(
+        config, store, queue, source, _weights_cache(config, store), notifier=notifier_from_env()
+    )
     if args.once:
         for warning in source.preflight():
             print(f"warning: {warning}", file=sys.stderr)

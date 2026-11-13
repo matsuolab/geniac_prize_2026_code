@@ -545,12 +545,12 @@ class HubWeights:
         except HTTPError as exc:
             raise _unreadable(f"cannot read weights {describe_mount(mount)}", exc) from exc
         gated = bool(info.gated)
+        accessible = True
         if gated:
-            # Asked now so a missing grant is refused before the image is transferred.
             try:
                 self._api.auth_check(mount.repo)
-            except GatedRepoError as exc:
-                raise _no_access(mount) from exc
+            except GatedRepoError:
+                accessible = False
             except HTTPError as exc:
                 raise _unreadable(
                     f"cannot check access to weights {describe_mount(mount)}", exc
@@ -559,6 +559,7 @@ class HubWeights:
             size_bytes=sum(sibling.size or 0 for sibling in info.siblings or []),
             gated=gated,
             private=info.private is not False,
+            accessible=accessible,
         )
 
     def download(self, mount: WeightsMount, target: Path) -> None:
@@ -579,8 +580,7 @@ class HubWeights:
 def _no_access(mount: WeightsMount) -> Rejected:
     return Rejected(
         ErrorCode.WEIGHTS_GATED,
-        f"the organizer account has not been granted access to gated repo {mount.repo}; "
-        "ask the organizers to request it, then push again",
+        f"the organizer account has not been granted access to gated repo {mount.repo}",
     )
 
 

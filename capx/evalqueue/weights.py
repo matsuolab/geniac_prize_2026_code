@@ -7,6 +7,10 @@ names what it needs instead — repo, commit, and where to mount it
     watcher   check()  not another team's repo, private only in the team's own org,
                        exists at that commit, gated as declared, under the cap
               fetch()  materialize into weights/<owner>--<name>/<commit>/
+              fetch_missing()  on every poll, whatever a queued job still lacks: a gated
+                       repo the organizer account has no access to yet is queued without
+                       its copy, which arrives once a person accepts the repo's terms
+    worker             wait until every copy is in place
     runner             bind each one read-only at its declared path
     worker    prune_weights()  after each job, drop what no queued job still needs
 
@@ -64,6 +68,8 @@ class RepoInfo:
     size_bytes: int
     gated: bool
     private: bool
+    accessible: bool = True
+    """False for a gated repo whose terms the organizer account has not accepted."""
 
 
 class WeightsFetcher(Protocol):
@@ -93,10 +99,11 @@ class WeightsCache:
         """HuggingFace org -> the registered team it belongs to, read at each check
         because teams register while the queue runs."""
 
-    def check(self, team_id: str, mounts: list[WeightsMount]) -> None:
-        """Everything that can be refused from metadata, before any transfer."""
+    def check(self, team_id: str, mounts: list[WeightsMount]) -> list[WeightsMount]:
+        """Everything that can be refused from metadata, before any transfer. Returns
+        the gated mounts the organizer account cannot download yet."""
         if not mounts:
-            return
+            return []
         registered = self._team_orgs() if self._team_orgs else {}
         orgs = {org.casefold(): team for org, team in registered.items()}
         for mount in mounts:
@@ -110,6 +117,7 @@ class WeightsCache:
                     "declare weights from its own team's org or from outside every team",
                 )
         total_bytes = 0
+        awaiting: list[WeightsMount] = []
         for mount in mounts:
             info = self._fetcher.describe(mount)
             # The organizer's token reads more than the registered teams' orgs: teams
@@ -126,6 +134,8 @@ class WeightsCache:
                     f"{mount.repo} is gated on HuggingFace; declare `gated: true` for it so "
                     "the organizers know to request access",
                 )
+            if not info.accessible:
+                awaiting.append(mount)
             total_bytes += info.size_bytes
         if self._max_gb > 0 and total_bytes / GB > self._max_gb:
             raise Rejected(
@@ -133,6 +143,23 @@ class WeightsCache:
                 f"declared weights total {total_bytes / GB:.1f} GiB, over the "
                 f"{self._max_gb:.0f} GiB limit",
             )
+        return awaiting
+
+    def fetch_missing(self, mounts: list[WeightsMount]) -> list[WeightsMount]:
+        """Fetch each mount that has no copy and can be downloaded now. Returns the ones
+        still without a copy. A mount that fails is logged and left for the next call."""
+        still_missing: list[WeightsMount] = []
+        for mount in mounts:
+            if self._store.weights_dir(mount).is_dir():
+                continue
+            try:
+                if self._fetcher.describe(mount).accessible:
+                    self.fetch([mount])
+                    continue
+            except Rejected as exc:
+                _logger.warning("cannot fetch weights %s yet: %s", describe_mount(mount), exc)
+            still_missing.append(mount)
+        return still_missing
 
     def fetch(self, mounts: list[WeightsMount]) -> None:
         """Put every mount in place. All of them stay fresh for prune_weights until this
