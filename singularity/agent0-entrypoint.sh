@@ -101,9 +101,18 @@ echo "[agent0] serving ${MODEL} from ${MODEL_PATH} on ${MODEL_SOCKET}"
 echo "[agent0] fallback localizer -> ${CAPX_MOLMO_URL} (${CAPX_MOLMO_MODEL})"
 # fp8 on the fly keeps a 27B inside a single card's budget alongside the sim's
 # rendering context; it needs compute capability >= 8.9 (Ada/Hopper/Blackwell).
-# vLLM binds the socket itself: it fails on a file left by a dead server, and the
-# umask keeps the socket owner-only.
-[ -S "${MODEL_SOCKET}" ] && rm -f "${MODEL_SOCKET}"
+# vLLM binds the socket itself and fails on a file a dead server left behind.
+# Only that file is removed: curl exit 7 means nothing accepted the connection.
+if [[ -S "${MODEL_SOCKET}" ]]; then
+    rc=0
+    curl -s -o /dev/null --max-time 5 --unix-socket "${MODEL_SOCKET}" http://localhost/ || rc=$?
+    if (( rc != 7 )); then
+        echo "[agent0] a server is already listening on ${MODEL_SOCKET}" >&2
+        exit 1
+    fi
+    rm -f "${MODEL_SOCKET}"
+fi
+# The umask keeps the socket owner-only.
 ( umask 077; exec /opt/venv-serve/bin/python -m vllm.entrypoints.openai.api_server \
     --model "${MODEL_PATH}" \
     --served-model-name "${MODEL}" \

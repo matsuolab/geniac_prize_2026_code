@@ -71,7 +71,16 @@ echo "        client expects served-model-name=${MOLMO_MODEL}"
 # served-model-name fixed to MOLMO_MODEL so molmo.py's `model:` field matches.
 # HF_HUB_ENABLE_HF_TRANSFER=1 speeds up the first weight pull.
 # vLLM binds the socket itself and fails on a file a dead server left behind.
-[[ -S "${SOCKET}" ]] && rm -f "${SOCKET}"
+# Only that file is removed: curl exit 7 means nothing accepted the connection.
+if [[ -S "${SOCKET}" ]]; then
+    rc=0
+    curl -s -o /dev/null --max-time 5 --unix-socket "${SOCKET}" http://localhost/ || rc=$?
+    if (( rc != 7 )); then
+        echo "ERROR: a server is already listening on ${SOCKET}" >&2
+        exit 1
+    fi
+    rm -f "${SOCKET}"
+fi
 umask 077
 HF_HUB_ENABLE_HF_TRANSFER=1 exec python -m vllm.entrypoints.openai.api_server \
     --model "${MOLMO_MODEL}" \
