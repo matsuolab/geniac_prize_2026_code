@@ -31,6 +31,7 @@ RUN python -m pip install --upgrade pip \
         "pillow>=10" \
         "msgpack" \
         "tyro" \
+        "imageio-ffmpeg" \
     && python -m pip install --no-deps -e .
 
 CMD ["python", "docker/serve_environment.py"]

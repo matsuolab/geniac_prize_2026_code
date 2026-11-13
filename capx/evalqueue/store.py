@@ -11,6 +11,7 @@ to each other directly, only through this tree on the cluster-wide filesystem:
       state/seen/                            watcher bookkeeping (already enqueued)
       state/deferred/<team_id>.json          a submission waiting behind the team's running one
       weights/<owner>--<name>/<commit>/      model repos submissions declared, mounted read-only
+      recordings/<run_id>/<subset>/          organizer-only videos of a few episodes, kept 7 days
 
 ``rename`` within the tree is atomic and fails with ``ENOENT`` for the loser of a
 race, so nothing here needs a database or a lock server. Documents are written to a
@@ -57,6 +58,7 @@ class EvalStore:
         self.seen = self.state / "seen"
         self.deferred = self.state / "deferred"
         self.weights = self.root / "weights"
+        self.recordings = self.root / "recordings"
 
     def ensure_layout(self) -> None:
         for path in (
@@ -72,6 +74,8 @@ class EvalStore:
             self.weights,
         ):
             path.mkdir(parents=True, exist_ok=True)
+        self.recordings.mkdir(mode=0o700, parents=True, exist_ok=True)
+        self.recordings.chmod(0o700)
 
     def weights_dir(self, mount: WeightsMount) -> Path:
         return self.weights / mount.repo.replace("/", "--") / mount.revision

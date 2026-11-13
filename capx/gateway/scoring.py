@@ -39,6 +39,10 @@ class Scoring:
     def _score(self, episode_id: str, task_id: str) -> EpisodeScore:
         return self._scores.setdefault(episode_id, EpisodeScore(task_id))
 
+    def succeeded(self, episode_id: str) -> bool:
+        score = self._scores.get(episode_id)
+        return score is not None and score.success
+
     def drop(self, episode_id: str) -> None:
         self._scores.pop(episode_id, None)
 

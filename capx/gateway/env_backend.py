@@ -13,8 +13,8 @@ eval queue uses Unix sockets in a run-private directory, because loopback on a
 shared Slurm node is visible to every job on the box.
 
 One connection is one env lifecycle: ``build`` (carrying the ``TaskSpec``), then
-reset / apply_raw_action (which also reports success) / get_* / reward / sim_time
-until ``close`` or disconnect. A backend serves one connection at a time.
+reset / apply_raw_action (which also reports success) / get_* / reward / sim_time /
+start_recording / stop_recording until ``close`` or disconnect. A backend serves one connection at a time.
 """
 
 from __future__ import annotations
@@ -30,7 +30,7 @@ from pathlib import Path
 from typing import Any, NamedTuple
 
 from capx.gateway.gateway import EnvFactory
-from capx.gateway.low_level import LowLevelEnv, StepOutcome
+from capx.gateway.low_level import LowLevelEnv, Recordable, StepOutcome
 from capx.protocol.actions import RawAction, decode_action, encode_action
 from capx.protocol.framing import (
     bind_stream_socket,
@@ -146,6 +146,13 @@ class EnvBackendServer:
             return {"reward": float(env.compute_reward())}
         if method == "sim_time":
             return {"sim_time": float(env.sim_time)}
+        if method in ("start_recording", "stop_recording"):
+            if not isinstance(env, Recordable):
+                raise ValueError(f"{type(env).__name__} cannot record")
+            if method == "start_recording":
+                env.start_recording(float(payload["fps"]))
+                return {}
+            return {"frames": env.stop_recording()}
         if method == "close":
             env.close()
             return {}
@@ -253,6 +260,12 @@ class RemoteLowLevelEnv:
 
     def compute_reward(self) -> float:
         return float(self._rpc("compute_reward")["reward"])
+
+    def start_recording(self, fps: float) -> None:
+        self._rpc("start_recording", {"fps": fps})
+
+    def stop_recording(self) -> list[bytes]:
+        return list(self._rpc("stop_recording")["frames"])
 
     def close(self) -> None:
         try:

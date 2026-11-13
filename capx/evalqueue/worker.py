@@ -33,6 +33,7 @@ from capx.evalqueue.config import QueueConfig
 from capx.evalqueue.deadline import close_round, past_deadline
 from capx.evalqueue.models import ErrorCode, QueueJob, RunResult
 from capx.evalqueue.queue import ClaimedJob, FileQueue
+from capx.evalqueue.recordings import prune_recordings
 from capx.evalqueue.runner import EvalRunner, Interrupted, LeaseLost
 from capx.evalqueue.scratch import prune_runs
 from capx.evalqueue.store import EvalStore, run_id_for, utcnow
@@ -48,6 +49,9 @@ STALE_CLAIM_S = 3 * HEARTBEAT_S
 MAX_ATTEMPTS = 3
 """Runs a job may start that end with their worker gone. Past that it fails as
 ``internal_error`` rather than taking down one worker after another."""
+
+PRUNE_RECORDINGS_S = 3600.0
+"""How often the worker looks for recordings past ``recordings.keep_days``."""
 
 WAIT_WARNING_S = 600.0
 """How often a worker that waits for a remote GPU's lease or for weights says so again."""
@@ -76,6 +80,7 @@ class EvalWorker:
         self._stopping = False
         self._waiting_for_gpu = False
         self._next_wait_warning = 0.0
+        self._next_recordings_prune = 0.0
 
     def install_signal_handlers(self) -> None:
         def _handler(signum: int, _frame: FrameType | None) -> None:
@@ -98,6 +103,7 @@ class EvalWorker:
         completed = 0
         while not self._stopping and (max_jobs is None or completed < max_jobs):
             self._recover()
+            self._prune_recordings()
             if past_deadline(self._config):
                 close_round(self._store, self._queue)
                 time.sleep(self._config.watcher.poll_interval_s)
@@ -231,6 +237,18 @@ class EvalWorker:
             return
         if removed:
             _logger.info("removed the directories of earlier runs: %s", removed)
+
+    def _prune_recordings(self) -> None:
+        if time.monotonic() < self._next_recordings_prune:
+            return
+        self._next_recordings_prune = time.monotonic() + PRUNE_RECORDINGS_S
+        try:
+            removed = prune_recordings(self._store, self._config.recordings.keep_days)
+        except Exception:
+            _logger.exception("removing old recordings failed")
+            return
+        if removed:
+            _logger.info("removed the recordings of runs: %s", removed)
 
     def _recover(self) -> None:
         recovered = self._queue.recover_claims(self.worker_id, STALE_CLAIM_S)

@@ -28,6 +28,7 @@ capx evalq publish    リーダーボードを HF へ ◀──┘ <root>/result
 | `state/retrying/` | HF の一時的な障害でやり直している提出と、最初に失敗した時刻（§5） |
 | `state/ranking/` | 順位評価の提出の検査結果（§7）。`heads/` に、締切の前に最後に見た各チームの `main` と、締切の時点の `main` |
 | `weights/<owner>--<name>/<commit>/` | 提出物が `weights` で申告したモデル |
+| `recordings/<run_id>/<subset>/<sim>/` | 運営が確認するための試行の動画（下記「試行の録画」）。7日で消える |
 
 `runs/<run_id>/` は、同じチームの次の評価が始まるときに worker が消します。消すのは結果が出ている評価だけで、
 `results/` と `queue/` の記録は残ります。実行中の評価のほか、次のものも消さないので、運営が見てから手で消します。
@@ -544,6 +545,23 @@ simulators:
 
 別ホストのソケットのパスは `-gpu-<gpu>` のぶん長くなります。AF_UNIX の 107 バイトを超えないかを、gateway を
 起動する前に一番大きいレーン番号のパスで確かめ、超えるときはその subset を `internal_error` で終えます。
+
+### 試行の録画
+
+提出物のポリシーが正しく動いているかを運営が確かめるために、gateway は1回の評価（subset）ごとに、
+シミュレータごとに `recordings.per_simulator`（既定 10）個の試行をランダムに選んで録画します。
+どの試行を選ぶかは gateway の起動時に OS の乱数で決め、提出物には伝えません。
+
+- バックエンドがシミュレーション時間 0.1 秒ごとにシーンのカメラを 256 px で撮り、試行の終わりに gateway が
+  受け取って `<root>/recordings/<run_id>/<subset>/<sim>/<task_id>__trial<k>__<success|fail>.mp4` に書きます。
+  ファイルはそのまま開いて見ます。
+- この場所は `runs/` の外にあり、mount するのは gateway のコンテナだけです。提出コンテナとバックエンドからは
+  見えません。`recordings/` は 0700 で作ります。HF にも結果にもアーカイブにも入りません。
+- worker は1時間ごとに、最後の書き込みから `recordings.keep_days`（既定 7）日たった評価の動画を消します。
+- 録画に失敗しても試行と採点には影響しません（gateway のログに残るだけです）。撮影の時間は、録画した試行の
+  ジョブの時間に含まれます。
+- 録画しないときは worker を `--no-recordings` で起動します（`supervise --no-recordings` は worker に渡します）。
+  設定で止めるときは `recordings.enabled: false` です。
 
 ## 7. 日常の操作
 

@@ -33,7 +33,8 @@ From: python:3.11-slim
         "pyyaml" \
         "pillow>=10" \
         "msgpack" \
-        "tyro"
+        "tyro" \
+        "imageio-ffmpeg"
     python -m pip install --no-cache-dir --no-deps -e .
 
     # The repo tree is group-only (0770) on the build host and everything lands

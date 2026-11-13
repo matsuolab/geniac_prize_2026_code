@@ -42,6 +42,7 @@ from typing import IO
 from capx.evalqueue.config import QueueConfig, RemoteBackendConfig, SubsetConfig
 from capx.evalqueue.deadline import past_deadline
 from capx.evalqueue.models import ErrorCode, QueueJob, RunResult, RunStatus, SubsetResult
+from capx.evalqueue.recordings import recordings_dir
 from capx.evalqueue.scratch import StorageLimit
 from capx.evalqueue.store import EvalStore, trials_finished, utcnow
 from capx.protocol.framing import check_unix_path
@@ -798,8 +799,14 @@ class EvalRunner:
             "CAPX_BACKENDS_ON_DEMAND": "1",
             "CAPX_BACKEND_START_TIMEOUT_S": str(config.limits.backend_startup_s),
         }
+        binds = [f"{run_dir}:{run_dir}"]
+        if config.recordings.enabled:
+            videos = recordings_dir(self._store, run_dir.name, layout.subset_dir.name)
+            env["CAPX_RECORDINGS_DIR"] = str(videos)
+            env["CAPX_RECORDINGS_PER_SIMULATOR"] = str(config.recordings.per_simulator)
+            binds.append(f"{videos}:{videos}")
         return layout.spawn_organizer(
-            "gateway", image, "serve_environment.py", env, binds=(f"{run_dir}:{run_dir}",)
+            "gateway", image, "serve_environment.py", env, binds=tuple(binds)
         )
 
     def _run_submission(

@@ -8,8 +8,10 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+import numpy as np
+
 from capx.gateway.env_build import build_low_level_env
-from capx.gateway.low_level import FrankaSimAdapter, LowLevelEnv
+from capx.gateway.low_level import FrankaSimAdapter, LowLevelEnv, render_mujoco
 from capx.protocol.taskpack import Embodiment, TaskSpec
 
 if TYPE_CHECKING:
@@ -24,6 +26,9 @@ class RobosuiteLowLevelEnv(FrankaSimAdapter):
     @property
     def sim_time(self) -> float:
         return float(self._base.robosuite_env.sim.data.time)
+
+    def _render_frame(self) -> np.ndarray:
+        return render_mujoco(self._base.robosuite_env.sim, self._base.save_camera_name)
 
     def get_proprio(self) -> dict[str, Any]:
         obs = self._base.robosuite_env._get_observations()
@@ -66,4 +71,4 @@ class RobosuiteEnvFactory:
         return RobosuiteLowLevelEnv(base)
 
 
-__all__ = ["RobosuiteLowLevelEnv", "RobosuiteEnvFactory"]
+__all__ = ["RobosuiteEnvFactory", "RobosuiteLowLevelEnv"]
