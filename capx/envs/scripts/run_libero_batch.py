@@ -49,7 +49,7 @@ class LiberoBatchLaunchArgs:
         ]
     )
 
-    server_url: str = "http://127.0.0.1:8110/chat/completions"  # local server
+    server_url: str = "http+unix://model.sock/chat/completions"  # local server
 
     # Output directory base
     output_dir: str = "./outputs/libero_batch_run"

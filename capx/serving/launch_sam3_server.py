@@ -9,13 +9,14 @@ from typing import Any, List, Tuple
 import numpy as np
 import torch
 import tyro
-import uvicorn
 from fastapi import FastAPI, HTTPException
 from PIL import Image
 from pydantic import BaseModel
 
 from sam3.model.sam3_image_processor import Sam3Processor
 from sam3.model_builder import build_sam3_image_model
+
+from capx.utils.unix_http import serve_app
 
 
 # Configure logging
@@ -240,8 +241,7 @@ async def segment_point(req: PointPromptRequest):
 
 def main(
     device: str = "cuda",
-    port: int = 8114,
-    host: str = "127.0.0.1",
+    socket: str = "sam3.sock",
     checkpoint_path: str | None = None,
 ):
     """``checkpoint_path`` is a local sam3.pt. It defaults to $CAPX_SAM3_CHECKPOINT,
@@ -281,7 +281,7 @@ def main(
     _PROCESSOR = Sam3Processor(_MODEL, device=device, confidence_threshold=0.0)
     logger.info(f"SAM3 model loaded on {device}. Starting Server...")
 
-    uvicorn.run(app, host=host, port=port)
+    serve_app(app, socket)
 
 
 if __name__ == "__main__":

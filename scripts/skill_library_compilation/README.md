@@ -17,7 +17,7 @@
 
 ## 前提条件
 
-- OpenRouter プロキシが起動していること: `uv run --no-sync --active capx/serving/openrouter_server.py --key-file .openrouterkey --port 8110`
+- OpenRouter プロキシが起動していること: `uv run --no-sync --active capx/serving/openrouter_server.py --key-file .openrouterkey`（`model.sock` で待ち受けます）
 - `outputs/` に以下の条件を満たす評価の出力があること（`capx/envs/launch.py` によるもの）
     - 使用したAPIが低レベルである（FrankaLiberoApiReducedなど）
     - タスクに成功している

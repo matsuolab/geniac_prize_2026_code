@@ -39,7 +39,7 @@ python capx/envs/launch.py --config-path env_configs/r1pro/r1pro_pick_up_radio_o
 LLM評価では、先にOpenAI互換プロキシを同じコンテナ内で起動します。別のターミナルで実行してください。
 
 ```bash
-python capx/serving/openai_server.py --port 8110
+python capx/serving/openai_server.py   # model.sock で待ち受ける
 ```
 
 その後、タスク設定とモデルを指定します。
@@ -53,7 +53,7 @@ python capx/envs/launch.py --config-path env_configs/r1pro/b1k_hiding_Easter_egg
 この`launch.py`コマンドでは、次の処理が順番に行われます。
 
 1. 指定したYAMLを読み込み、環境・試行回数・出力先を決める。
-2. YAMLの`api_servers`に定義されたSAM3（8114）とContactGraspNet（8115）を自動起動する。すでにポートが使用中なら、既存のサーバーを利用する。
+2. YAMLの`api_servers`に定義されたSAM3（`sam3.sock`）とContactGraspNet（`graspnet.sock`）を自動起動する。そのソケットですでにサーバーが待ち受けていれば、既存のサーバーを利用する。
 3. `R1ProBehaviorCodeEnv`と、低レベル環境の`R1ProBehaviourLowLevel`（OmniGibson / Isaac Sim）を初期化する。
 4. 指定した`gpt-5`へタスクのプロンプトを送り、実行用のPythonコードを生成する。
 5. 生成コードから`R1ProControlApi`の関数を呼び出し、SAM3による物体検出、ContactGraspNetによる把持姿勢生成、PyRoKiによるIK、移動・グリッパ操作を実行する。
@@ -80,14 +80,14 @@ OMNIGIBSON_HEADLESS=1 \
 uv run --no-sync --active capx/envs/launch.py \
     --config-path env_configs/r1pro/r1pro_pick_up_radio.yaml \
     --model "Qwen/Qwen3.6-27B" \
-    --server-url "http://127.0.0.1:8110/v1/chat/completions" \
+    --server-url "http+unix://model.sock/v1/chat/completions" \
     --max-tokens 8192 \
     --total-trials 1 \
     --num-workers 1 \
     --record-video True
 ```
 
-`run-qwen-server.sh`はコンテナ内の8110番ポートでQwenのOpenAI互換APIを提供します。初回起動時はモデル重みのダウンロードに時間がかかる場合があります。Qwenサーバーのエンドポイントは`/v1/chat/completions`のため、この場合は`--server-url`の指定が必要です。
+`run-qwen-server.sh`はコンテナ内のUnixソケット`model.sock`でQwenのOpenAI互換APIを提供します。初回起動時はモデル重みのダウンロードに時間がかかる場合があります。Qwenサーバーのエンドポイントは`/v1/chat/completions`のため、この場合は`--server-url`の指定が必要です。
 
 ## タスク設定
 

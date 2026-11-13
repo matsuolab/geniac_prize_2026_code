@@ -4,13 +4,13 @@
 #
 #   bash docker/run.sh                                   # enter the container
 #   # inside container (separate shells):
-#   bash /workspace/docker/run-qwen-server.sh &          # 1. LLM server (:8110)
+#   bash /workspace/docker/run-qwen-server.sh &          # 1. LLM server (model.sock)
 #   bash /workspace/docker/run-molmo-server.sh &         # 2. only for S3 (*_reduced_api*) configs:
-#                                                        #    point_prompt_molmo needs :8122
+#                                                        #    point_prompt_molmo needs molmo.sock
 #   bash /workspace/docker/run-robosuite-qwen.sh         # 3. rollout
 #
-# Perception servers (SAM3 :8114, GraspNet :8115, PyRoKi :8116) are auto-started
-# by launch.py from the YAML's api_servers list (ports already in use are reused).
+# Perception servers (sam3.sock, graspnet.sock, pyroki.sock in $CAPX_SOCKET_DIR) are
+# auto-started by launch.py from the YAML's api_servers list (live sockets are reused).
 #
 # GPU pinning notes:
 #   - CUDA_VISIBLE_DEVICES pins CUDA work (perception servers, sim physics).
@@ -22,7 +22,8 @@ set -euo pipefail
 CAPX_DIR="${CAPX_DIR:-/workspace/cap-x}"
 MODEL="${MODEL:-Qwen/Qwen3.6-27B}"
 CONFIG="${CONFIG:-env_configs/cube_lifting/franka_robosuite_cube_lifting_reduced_api.yaml}"
-PORT="${PORT:-8110}"
+export CAPX_SOCKET_DIR="$(realpath -m "${CAPX_SOCKET_DIR:-${HOME}/.capx/sockets}")"
+SOCKET="${CAPX_SOCKET_DIR}/model.sock"
 TRIALS="${TRIALS:-10}"
 WORKERS="${WORKERS:-3}"
 TEMP="${TEMP:-1.0}"
@@ -40,9 +41,9 @@ fi
 source .venv/bin/activate
 
 # vLLM endpoint needs the /v1 prefix (unlike the OpenAI proxy used by the smoke script).
-SERVER_URL="http://127.0.0.1:${PORT}/v1/chat/completions"
-if ! curl -fsS "http://127.0.0.1:${PORT}/v1/models" >/dev/null 2>&1; then
-    echo "ERROR: no vLLM server on :${PORT} -- start docker/run-qwen-server.sh first" >&2
+SERVER_URL="http+unix://model.sock/v1/chat/completions"
+if ! curl -fsS --unix-socket "${SOCKET}" "http://localhost/v1/models" >/dev/null 2>&1; then
+    echo "ERROR: no vLLM server on ${SOCKET} -- start docker/run-qwen-server.sh first" >&2
     exit 1
 fi
 

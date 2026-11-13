@@ -5,6 +5,7 @@
 set -e
 
 cd "$(git rev-parse --show-toplevel)"
+source scripts/sockets.sh
 
 SUITE="libero_goal_swap"
 TRIALS=10
@@ -12,7 +13,7 @@ WORKERS=2
 OUTPUT_DIR="./outputs/experiment_privileged_goal"
 CONFIG_BASE="env_configs/libero_pick_place/franka_libero_pick_place_privileged.yaml"
 MODEL="google/gemini-3.1-pro-preview"
-SERVER_URL="http://127.0.0.1:8110/chat/completions"
+SERVER_URL="http+unix://model.sock/chat/completions"
 
 echo "=== Privileged Baseline: $SUITE (Upper Bound Experiment) ==="
 echo "Config: $CONFIG_BASE"
@@ -23,27 +24,25 @@ echo ""
 echo "=== Checking required servers ==="
 MISSING=false
 
-# PyRoKi: check port is listening (no HTTP health endpoint on /)
-if ss -tln | grep -q ':8116 '; then
-    echo "  PyRoKi (8116): UP"
+if sock_up pyroki.sock; then
+    echo "  PyRoKi (pyroki.sock): UP"
 else
-    echo "  PyRoKi (8116): DOWN"
+    echo "  PyRoKi (pyroki.sock): DOWN"
     MISSING=true
 fi
 
-code=$(curl -sf -o /dev/null -w "%{http_code}" --connect-timeout 3 http://127.0.0.1:8110/health 2>/dev/null || echo "000")
-if [ "$code" = "200" ]; then
-    echo "  NV LLM (8110): UP"
+if sock_ok model.sock /health; then
+    echo "  NV LLM (model.sock): UP"
 else
-    echo "  NV LLM (8110): DOWN"
+    echo "  NV LLM (model.sock): DOWN"
     MISSING=true
 fi
 
 if [ "$MISSING" = true ]; then
     echo ""
     echo "ERROR: Required servers are not running."
-    echo "Start PyRoKi:  nohup python -m capx.serving.launch_pyroki_server --port 8116 --host 127.0.0.1 --robot panda_description --target-link panda_hand > logs/pyroki.log 2>&1 &"
-    echo "Start NV LLM:  nohup python -m capx.serving.openrouter_server --key-file .openrouterkey --port 8110 > logs/nv_server.log 2>&1 &"
+    echo "Start PyRoKi:  nohup python -m capx.serving.launch_pyroki_server --socket pyroki.sock --robot panda_description --target-link panda_hand > logs/pyroki.log 2>&1 &"
+    echo "Start NV LLM:  nohup python -m capx.serving.openrouter_server --key-file .openrouterkey > logs/nv_server.log 2>&1 &"
     exit 1
 fi
 

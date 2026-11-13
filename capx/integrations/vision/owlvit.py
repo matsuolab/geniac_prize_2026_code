@@ -13,7 +13,7 @@ from capx.utils.serve_utils import post_with_retries
 """OWL-ViT integration via FastAPI service."""
 
 # Configuration
-SERVICE_URL = "http://127.0.0.1:8117"
+SERVICE_URL = "http+unix://owlvit.sock"
 
 
 def _encode_image(image: np.ndarray | Image.Image) -> str:

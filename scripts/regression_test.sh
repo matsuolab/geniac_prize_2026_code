@@ -8,14 +8,15 @@
 #   ./scripts/regression_test.sh quick        # 10-trial smoke test (~30 sec)
 #
 # Prerequisites:
-#   API servers must be running on ports 8114 (SAM3), 8115 (GraspNet),
-#   8116 (PyRoKi), and 8110/8111 (LLM proxy).
+#   API servers must be running on the Unix sockets sam3.sock (SAM3), graspnet.sock
+#   (GraspNet), pyroki.sock (PyRoKi) and model.sock (LLM proxy) in $CAPX_SOCKET_DIR.
 #
 # Exit codes:
 #   0 = all tests passed
 #   1 = one or more tests failed
 
 set -euo pipefail
+source "$(dirname "${BASH_SOURCE[0]}")/sockets.sh"
 
 # ---------------------------------------------------------------------------
 # Configuration
@@ -86,15 +87,13 @@ run_test() {
 }
 
 check_server() {
-    local port="$1"
+    local sock="$1"
     local name="$2"
-    # Try /health first, fall back to TCP connection check
-    if curl -sf "http://127.0.0.1:${port}/health" > /dev/null 2>&1 \
-       || curl -so /dev/null -w '' "http://127.0.0.1:${port}/" 2>/dev/null; then
-        echo -e "  ${GREEN}✓${NC} ${name} (port ${port})"
+    if sock_up "$sock"; then
+        echo -e "  ${GREEN}✓${NC} ${name} (${sock})"
         return 0
     else
-        echo -e "  ${RED}✗${NC} ${name} (port ${port})"
+        echo -e "  ${RED}✗${NC} ${name} (${sock})"
         return 1
     fi
 }
@@ -112,43 +111,36 @@ echo ""
 PIDS_TO_CLEAN=()
 
 start_if_missing() {
-    local port="$1"
+    local sock="$1"
     local name="$2"
     shift 2
     local cmd=("$@")
 
-    if python3 -c "import socket; s=socket.create_connection(('127.0.0.1', $port), timeout=1); s.close()" 2>/dev/null; then
-        echo -e "  ${GREEN}✓${NC} ${name} (port ${port}) — already running"
+    if sock_up "$sock"; then
+        echo -e "  ${GREEN}✓${NC} ${name} (${sock}) — already running"
         return 0
     fi
 
-    echo -e "  ${YELLOW}→${NC} Starting ${name} (port ${port})..."
+    echo -e "  ${YELLOW}→${NC} Starting ${name} (${sock})..."
     "${cmd[@]}" &
     PIDS_TO_CLEAN+=($!)
     return 0
 }
 
 echo "Checking and auto-launching API servers..."
-start_if_missing 8114 "SAM3" \
-    python -m capx.serving.launch_sam3_server --port 8114 --device cuda --host 127.0.0.1
-start_if_missing 8115 "GraspNet" \
-    python -m capx.serving.launch_contact_graspnet_server --port 8115 --device cuda --host 127.0.0.1
-start_if_missing 8116 "PyRoKi" \
-    python -m capx.serving.launch_pyroki_server --port 8116 --host 127.0.0.1
+start_if_missing sam3.sock "SAM3" \
+    python -m capx.serving.launch_sam3_server --socket sam3.sock --device cuda
+start_if_missing graspnet.sock "GraspNet" \
+    python -m capx.serving.launch_contact_graspnet_server --socket graspnet.sock --device cuda
+start_if_missing pyroki.sock "PyRoKi" \
+    python -m capx.serving.launch_pyroki_server --socket pyroki.sock
 
-# Check for at least one LLM proxy
-llm_ok=false
-if curl -sf "http://127.0.0.1:8110/health" > /dev/null 2>&1; then
-    echo -e "  ${GREEN}✓${NC} LLM proxy — NVIDIA (port 8110)"
-    llm_ok=true
-fi
-if curl -sf "http://127.0.0.1:8111/health" > /dev/null 2>&1; then
-    echo -e "  ${GREEN}✓${NC} LLM proxy — OpenRouter (port 8111)"
-    llm_ok=true
-fi
-if ! $llm_ok; then
-    echo -e "  ${RED}✗${NC} No LLM proxy found (need port 8110 or 8111)"
-    echo -e "  Start one with: python capx/serving/openrouter_server.py --key-file .openrouterkey --port 8110"
+# The tests query the LLM proxy at the default --server-url, http+unix://model.sock/...
+if sock_ok model.sock /health; then
+    echo -e "  ${GREEN}✓${NC} LLM proxy (model.sock)"
+else
+    echo -e "  ${RED}✗${NC} No LLM proxy found on model.sock"
+    echo -e "  Start one with: python capx/serving/openrouter_server.py --key-file .openrouterkey"
     exit 1
 fi
 
@@ -159,8 +151,8 @@ deadline=$((SECONDS + 120))
 all_ready=false
 while (( SECONDS < deadline )); do
     ok=true
-    for port in 8114 8115 8116; do
-        python3 -c "import socket; s=socket.create_connection(('127.0.0.1', $port), timeout=1); s.close()" 2>/dev/null || ok=false
+    for sock in sam3.sock graspnet.sock pyroki.sock; do
+        sock_up "$sock" || ok=false
     done
     if $ok; then
         all_ready=true
@@ -176,9 +168,9 @@ if ! $all_ready; then
 fi
 
 echo "Checking all servers..."
-check_server 8114 "SAM3"       || { echo -e "${RED}FAIL${NC}"; exit 1; }
-check_server 8115 "GraspNet"   || { echo -e "${RED}FAIL${NC}"; exit 1; }
-check_server 8116 "PyRoKi"     || { echo -e "${RED}FAIL${NC}"; exit 1; }
+check_server sam3.sock "SAM3"         || { echo -e "${RED}FAIL${NC}"; exit 1; }
+check_server graspnet.sock "GraspNet" || { echo -e "${RED}FAIL${NC}"; exit 1; }
+check_server pyroki.sock "PyRoKi"     || { echo -e "${RED}FAIL${NC}"; exit 1; }
 
 # Cleanup servers on exit
 cleanup_servers() {

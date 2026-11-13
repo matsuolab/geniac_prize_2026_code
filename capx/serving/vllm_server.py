@@ -8,14 +8,16 @@ from dataclasses import dataclass
 
 import tyro
 
+from capx.utils.unix_http import ensure_private_dir, is_listening, resolve_socket
+
 
 @dataclass
 class Args:
     """Arguments for launching the vLLM OpenAI-compatible server."""
 
     model: str
-    host: str = "0.0.0.0"
-    port: int = 8000
+    socket: str = "model.sock"
+    """Unix socket to serve on: a path, or a name inside $CAPX_SOCKET_DIR."""
     dtype: str = "bfloat16"
     tensor_parallel_size: int = 1
     gpu_memory_utilization: float = 0.9
@@ -31,10 +33,8 @@ def _build_command(args: Args) -> list[str]:
         "vllm.entrypoints.openai.api_server",
         "--model",
         args.model,
-        "--host",
-        args.host,
-        "--port",
-        str(args.port),
+        "--uds",
+        str(resolve_socket(args.socket)),
         "--dtype",
         args.dtype,
         "--tensor-parallel-size",
@@ -57,6 +57,13 @@ def main(args: Args) -> None:
             "vllm is required. Install with `pip install vllm` or add to extras."
         ) from exc
 
+    socket_path = resolve_socket(args.socket)
+    ensure_private_dir(socket_path.parent)
+    # vLLM binds the path itself and fails on a file a dead server left behind.
+    if socket_path.is_socket():
+        if is_listening(socket_path):
+            raise SystemExit(f"another server is already listening on {socket_path}")
+        socket_path.unlink()
     cmd = _build_command(args)
     env = os.environ.copy()
 
@@ -66,7 +73,11 @@ def main(args: Args) -> None:
         log_handle = os.open(args.log_file, os.O_CREAT | os.O_WRONLY | os.O_TRUNC, 0o644)
         stdout = stderr = log_handle
 
-    process = subprocess.Popen(cmd, env=env, stdout=stdout, stderr=stderr)
+    previous_umask = os.umask(0o077)
+    try:
+        process = subprocess.Popen(cmd, env=env, stdout=stdout, stderr=stderr)
+    finally:
+        os.umask(previous_umask)
 
     def _forward_signal(signum: int, _frame: object | None) -> None:
         if process.poll() is None:

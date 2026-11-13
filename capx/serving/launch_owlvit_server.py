@@ -6,7 +6,6 @@ from typing import Any
 import numpy as np
 import torch
 import tyro
-import uvicorn
 from fastapi import FastAPI, HTTPException
 from PIL import Image
 from pydantic import BaseModel
@@ -16,6 +15,8 @@ from transformers import (
     OwlViTForObjectDetection,
     OwlViTProcessor,
 )
+
+from capx.utils.unix_http import serve_app
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -125,8 +126,7 @@ async def detect_endpoint(req: DetectRequest):
 def main(
     model_name: str = "google/owlv2-large-patch14-ensemble",
     device: str = "cuda",
-    port: int = 8117,
-    host: str = "127.0.0.1",
+    socket: str = "owlvit.sock",
     threshold: float = 0.05,
 ):
     global _PROC, _MODEL, _DEVICE, _THRESHOLD
@@ -151,7 +151,7 @@ def main(
         _MODEL.eval()
 
         logger.info(f"OWL-ViT model loaded on {device}. Starting server...")
-        uvicorn.run(app, host=host, port=port)
+        serve_app(app, socket)
 
     except Exception as e:
         logger.error(f"Error loading model: {e}")

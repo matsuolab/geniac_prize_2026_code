@@ -15,7 +15,12 @@ from pathlib import Path
 
 import pytest
 
-from capx.submission.interfaces import GATEWAY_CONFIG_DIR, load_task_run_config
+from capx.serving.api_servers import ApiServerSpec
+from capx.submission.interfaces import (
+    GATEWAY_CONFIG_DIR,
+    load_submission_config,
+    load_task_run_config,
+)
 
 _SAM3 = "capx.serving.launch_sam3_server.main"
 _SAM2 = "capx.serving.launch_sam2_server.main"
@@ -44,3 +49,25 @@ def test_a_task_config_starts_exactly_the_servers_its_apis_call(path: Path) -> N
     needed = set().union(*(_SERVERS_BY_API[api] for api in task_cfg.apis))
     started = {server["_target_"] for server in task_cfg.api_servers}
     assert started == needed
+
+
+# The sockets the clients (capx/integrations/vision, capx/integrations/motion) default to.
+_SOCKET_BY_SERVER = {
+    _SAM3: "sam3.sock",
+    _SAM2: "sam2.sock",
+    _OWLVIT: "owlvit.sock",
+    _GRASPNET: "graspnet.sock",
+    _PYROKI: "pyroki.sock",
+}
+
+
+@pytest.mark.parametrize("path", _TASK_CONFIGS, ids=lambda p: p.name)
+def test_each_server_listens_on_the_socket_its_client_calls(path: Path) -> None:
+    for server in load_task_run_config(str(path)).api_servers:
+        spec = ApiServerSpec.model_validate(server)
+        assert spec.socket == _SOCKET_BY_SERVER[spec.target]
+
+
+def test_the_runner_config_reaches_the_model_over_a_unix_socket() -> None:
+    cfg = load_submission_config(str(GATEWAY_CONFIG_DIR / "runner.yaml"))
+    assert cfg.server_url.startswith("http+unix://")

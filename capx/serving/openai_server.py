@@ -1,11 +1,12 @@
 """OpenAI-compatible proxy server for CaP-X, in front of OpenAI's API.
 
-The proxy exposes `/chat/completions` on the port (8110) that CaP-X YAML configs
-default to, so task configs work unmodified — only the `--model` flag differs.
+The proxy exposes `/chat/completions` on the Unix socket `model.sock` (in
+`$CAPX_SOCKET_DIR`, default `~/.capx/sockets`) that CaP-X defaults to, so task
+configs work unmodified — only the `--model` flag differs.
 `openrouter_server.py` is the same proxy in front of OpenRouter.
 
-It listens on 127.0.0.1 unless `--host` says otherwise: anyone who can reach it
-spends the operator's key.
+It listens only on that socket, in a directory only its owner can enter: anyone who
+can reach it spends the operator's key.
 
 API key resolution order:
   1. `--api-key` CLI flag (discouraged — ends up in shell history)
@@ -15,13 +16,13 @@ API key resolution order:
 Example::
 
     export OPENAI_API_KEY=sk-...
-    python capx/serving/openai_server.py --port 8110
+    python capx/serving/openai_server.py
 
     # then, in another shell:
     python capx/envs/launch.py \\
         --config-path env_configs/libero/franka_libero_spatial_0_smoke.yaml \\
         --model gpt-4o-mini \\
-        --server-url http://127.0.0.1:8110/chat/completions
+        --server-url http+unix://model.sock/chat/completions
 """
 
 from __future__ import annotations
@@ -34,12 +35,13 @@ from typing import Any, Literal
 
 import openai
 import tyro
-import uvicorn
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from openai import AsyncOpenAI
 from pydantic import BaseModel
+
+from capx.utils.unix_http import serve_app
 
 logger = logging.getLogger(__name__)
 
@@ -177,8 +179,7 @@ def create_app(
 def main(
     key_file: str = ".openaikey",
     api_key: str | None = None,
-    host: str = "127.0.0.1",
-    port: int = 8110,
+    socket: str = "model.sock",
     base_url: str = "https://api.openai.com/v1/",
 ):
     """Start the OpenAI proxy server.
@@ -193,7 +194,7 @@ def main(
         api_key = load_api_keys(key_file)[0]
         logger.info(f"Loaded API key from {key_file}")
 
-    uvicorn.run(create_app(api_key=api_key, base_url=base_url), host=host, port=port)
+    serve_app(create_app(api_key=api_key, base_url=base_url), socket)
 
 
 if __name__ == "__main__":

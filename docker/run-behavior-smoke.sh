@@ -16,7 +16,8 @@ CAPX_DIR="${CAPX_DIR:-/workspace/cap-x}"
 B1K_DIR="${CAPX_DIR}/capx/third_party/b1k"
 MODE="${MODE:-oracle}"
 MODEL="${MODEL:-gpt-5}"
-PORT="${PORT:-8110}"
+export CAPX_SOCKET_DIR="$(realpath -m "${CAPX_SOCKET_DIR:-${HOME}/.capx/sockets}")"
+SOCKET="${CAPX_SOCKET_DIR}/model.sock"
 TOTAL_TRIALS="${TOTAL_TRIALS:-1}"
 NUM_WORKERS="${NUM_WORKERS:-1}"
 
@@ -75,13 +76,13 @@ if [[ "${MODE}" == "llm" ]]; then
         exit 1
     fi
     PROXY_LOG="${LOG_DIR}/openai_proxy.log"
-    echo "[behavior] starting OpenAI proxy on :${PORT} via ${PROXY_PY} (log: ${PROXY_LOG})"
-    "${PROXY_PY}" capx/serving/openai_server.py --port "${PORT}" > "${PROXY_LOG}" 2>&1 &
+    echo "[behavior] starting OpenAI proxy on ${SOCKET} via ${PROXY_PY} (log: ${PROXY_LOG})"
+    "${PROXY_PY}" capx/serving/openai_server.py --socket "${SOCKET}" > "${PROXY_LOG}" 2>&1 &
     PROXY_PID=$!
     trap '[[ -n "${PROXY_PID}" ]] && kill "${PROXY_PID}" 2>/dev/null || true' EXIT
 
     for _ in {1..30}; do
-        if curl -fsS "http://127.0.0.1:${PORT}/health" >/dev/null 2>&1; then
+        if curl -fsS --unix-socket "${SOCKET}" "http://localhost/health" >/dev/null 2>&1; then
             echo "[behavior] proxy ready"
             break
         fi
@@ -97,7 +98,7 @@ if [[ "${MODE}" == "llm" ]]; then
     python capx/envs/launch.py \
         --config-path "${CONFIG}" \
         --model "${MODEL}" \
-        --server-url "http://127.0.0.1:${PORT}/chat/completions" \
+        --server-url "http+unix://model.sock/chat/completions" \
         --max-tokens "${MAX_TOKENS:-32768}" \
         --total-trials "${TOTAL_TRIALS}" \
         --num-workers "${NUM_WORKERS}"

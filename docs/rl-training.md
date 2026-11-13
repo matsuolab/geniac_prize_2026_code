@@ -114,7 +114,6 @@ bash scripts/train_franka_grpo.sh
 | `TRAIN_TEMPERATURE` | `1.0` | 学習中のサンプリング温度 |
 | `TRAIN_DATASET_SIZE` | `256` | 学習プロンプト数 |
 | `VAL_DATASET_SIZE` | `256` | 検証プロンプト数 |
-| `PYROKI_PORT` | `8116` | PyRoKi IK サーバーのポート |
 
 ---
 
@@ -147,7 +146,7 @@ source .venv-rl/bin/activate
 python -m capx.serving.vllm_server --model $TARGET_DIR
 ```
 
-デフォルトでは、サーバーは `http://localhost:8000` で起動します。
+サーバーは Unix ソケット `model.sock`（`CAPX_SOCKET_DIR`、既定は `~/.capx/sockets` の中）で待ち受けます。PyRoKi IK サーバーも同じディレクトリの `pyroki.sock` で待ち受けます。
 
 ### 3. 評価の実行
 
@@ -164,10 +163,9 @@ export TARGET_DIR=${CKPT_PATH%/actor}/hf_checkpoint
 source .venv-rl/bin/activate
 python capx/envs/launch.py \
     --config-path env_configs/cube_lifting/franka_robosuite_cube_lifting.yaml \
-    --server-url http://127.0.0.1:8000/chat/completions \
     --model $TARGET_DIR \
     --total-trials 100 \
-    --server-url http://127.0.0.1:8000/v1/chat/completions
+    --server-url http+unix://model.sock/v1/chat/completions
 ```
 
 ---

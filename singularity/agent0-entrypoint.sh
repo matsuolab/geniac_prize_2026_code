@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 # Entrypoint of the CaP-Agent0 submission image (singularity/capx-submission-agent0.def).
 #
-# Starts the model server on loopback, waits for it, then runs the agent against
-# whatever gateway the organizer wired up (CAPX_ENV_SOCKET / CAPX_ENV_HOST). The
-# perception and IK sidecars are NOT started here — capx.submission.runner launches
-# the ones each task config asks for (`api_servers`) and stops them afterwards.
+# Starts the model server on a Unix socket, waits for it, then runs the agent against
+# whatever gateway the organizer wired up (CAPX_ENV_SOCKET). The perception and IK
+# sidecars are NOT started here — capx.submission.runner launches the ones each task
+# config asks for (`api_servers`) and stops them afterwards.
 #
-# The eval queue gives this container a loopback-only network namespace, which is
-# exactly enough for these local servers and nothing else.
+# All of these servers listen only on Unix sockets in CAPX_SOCKET_DIR, a 0700
+# directory, so no other user on the node can reach them.
 #
 # Env:
 #   CAPX_MODEL         name vLLM serves the model under, which the agent then asks
@@ -17,7 +17,8 @@
 #   CAPX_SAM3_CHECKPOINT  mounted sam3.pt, read by the SAM3 server the runner starts
 #   CAPX_RUNNER_CONFIG runner YAML, absolute or relative to /workspace/capx
 #                      (default env_configs/gateway/runner.yaml)
-#   CAPX_SERVE_PORT    vLLM port (default 8110); the agent is pointed at it
+#   CAPX_SOCKET_DIR    0700 directory for the model and sidecar sockets
+#                      (default $HOME/.capx/sockets); vLLM serves on model.sock there
 #   CAPX_GPU_UTIL / CAPX_MAX_MODEL_LEN / CAPX_MAX_NUM_SEQS
 #   CAPX_SERVE_TIMEOUT_S  how long to wait for vLLM to come up (default 1800)
 #   CAPX_SERVE_EXTRA_ARGS extra vLLM server flags (default: --attention-backend TRITON_ATTN)
@@ -33,7 +34,15 @@ MODEL="${CAPX_MODEL:-Qwen/Qwen3.6-27B}"
 MODEL_PATH="${CAPX_MODEL_PATH:-${MODEL}}"
 RUNNER_CONFIG="${CAPX_RUNNER_CONFIG:-env_configs/gateway/runner.yaml}"
 [[ "${RUNNER_CONFIG}" = /* ]] || RUNNER_CONFIG="/workspace/capx/${RUNNER_CONFIG}"
-PORT="${CAPX_SERVE_PORT:-8110}"
+export CAPX_SOCKET_DIR="$(realpath -m "${CAPX_SOCKET_DIR:-${HOME}/.capx/sockets}")"
+# Creates the directory 0700, refuses one other users can enter, and checks the
+# socket path fits the kernel's limit.
+MODEL_SOCKET="$(python -c '
+from capx.utils.unix_http import ensure_private_dir, resolve_socket
+path = resolve_socket("model.sock")
+ensure_private_dir(path.parent)
+print(path)
+')"
 GPU_UTIL="${CAPX_GPU_UTIL:-0.72}"
 # The runner opens `--concurrency` or the runner config's `concurrency` lanes, capped
 # at CAPX_MAX_LANES; the server's batch is sized for that many trials at once.
@@ -85,18 +94,29 @@ ENFORCE_EAGER="${CAPX_ENFORCE_EAGER:-0}"
 # The fallback object localizer (capx/integrations/vision/molmo.py) runs when
 # SAM3's language path finds nothing. Its default Molmo server does not exist in
 # this container, so point it at the model already served here, which takes images.
-export CAPX_MOLMO_URL="${CAPX_MOLMO_URL:-http://127.0.0.1:${PORT}/v1}"
+export CAPX_MOLMO_URL="${CAPX_MOLMO_URL:-http+unix://model.sock/v1}"
 export CAPX_MOLMO_MODEL="${CAPX_MOLMO_MODEL:-${MODEL}}"
 
-echo "[agent0] serving ${MODEL} from ${MODEL_PATH} on 127.0.0.1:${PORT}"
+echo "[agent0] serving ${MODEL} from ${MODEL_PATH} on ${MODEL_SOCKET}"
 echo "[agent0] fallback localizer -> ${CAPX_MOLMO_URL} (${CAPX_MOLMO_MODEL})"
 # fp8 on the fly keeps a 27B inside a single card's budget alongside the sim's
 # rendering context; it needs compute capability >= 8.9 (Ada/Hopper/Blackwell).
-/opt/venv-serve/bin/python -m vllm.entrypoints.openai.api_server \
+# vLLM binds the socket itself and fails on a file a dead server left behind.
+# Only that file is removed: curl exit 7 means nothing accepted the connection.
+if [[ -S "${MODEL_SOCKET}" ]]; then
+    rc=0
+    curl -s -o /dev/null --max-time 5 --unix-socket "${MODEL_SOCKET}" http://localhost/ || rc=$?
+    if (( rc != 7 )); then
+        echo "[agent0] a server is already listening on ${MODEL_SOCKET}" >&2
+        exit 1
+    fi
+    rm -f "${MODEL_SOCKET}"
+fi
+# The umask keeps the socket owner-only.
+( umask 077; exec /opt/venv-serve/bin/python -m vllm.entrypoints.openai.api_server \
     --model "${MODEL_PATH}" \
     --served-model-name "${MODEL}" \
-    --host 127.0.0.1 \
-    --port "${PORT}" \
+    --uds "${MODEL_SOCKET}" \
     --quantization fp8 \
     --kv-cache-dtype fp8 \
     --gpu-memory-utilization "${GPU_UTIL}" \
@@ -104,7 +124,7 @@ echo "[agent0] fallback localizer -> ${CAPX_MOLMO_URL} (${CAPX_MOLMO_MODEL})"
     --max-num-seqs "${MAX_NUM_SEQS}" \
     ${EAGER_FLAG} \
     --reasoning-parser qwen3 \
-    ${SERVE_EXTRA_ARGS} > "${LOGS}/vllm.log" 2>&1 &
+    ${SERVE_EXTRA_ARGS} ) > "${LOGS}/vllm.log" 2>&1 &
 SERVE_PID=$!
 stop_server() {
     kill "${SERVE_PID}" 2>/dev/null || true
@@ -118,8 +138,9 @@ while :; do
     # loop past the deadline.
     remaining=$(( deadline - SECONDS ))
     probe_s=$(( remaining < 10 ? remaining : 10 ))
-    (( probe_s > 0 )) && curl -sf --connect-timeout "${probe_s}" --max-time "${probe_s}" \
-        "http://127.0.0.1:${PORT}/health" > /dev/null 2>&1 && break
+    (( probe_s > 0 )) && curl -sf --unix-socket "${MODEL_SOCKET}" \
+        --connect-timeout "${probe_s}" --max-time "${probe_s}" \
+        "http://localhost/health" > /dev/null 2>&1 && break
     if ! kill -0 "${SERVE_PID}" 2>/dev/null; then
         echo "[agent0] vLLM died during startup; last log lines:" >&2
         tail -40 "${LOGS}/vllm.log" >&2
@@ -145,7 +166,7 @@ cd "${OUT}"
 python -m capx.submission.run \
     --config-path "${RUNNER_CONFIG}" \
     --model "${MODEL}" \
-    --server-url "http://127.0.0.1:${PORT}/v1/chat/completions" \
+    --server-url "http+unix://model.sock/v1/chat/completions" \
     --output-dir "${OUT}" "$@" &
 RUNNER_PID=$!
 trap 'kill -TERM "${RUNNER_PID}" 2>/dev/null || true' TERM INT

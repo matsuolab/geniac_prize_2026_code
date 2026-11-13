@@ -2,7 +2,7 @@
 
 ``openai_server.py``'s proxy with OpenRouter's base URL and headers. A model named
 ``openrouter/<provider>/<model>`` is sent as ``<provider>/<model>``. It listens on
-127.0.0.1:8110, the URL CaP-X configs default to, unless told otherwise.
+the Unix socket ``model.sock``, which CaP-X configs default to, unless told otherwise.
 
     python capx/serving/openrouter_server.py --key-file .openrouterkey
 """
@@ -13,10 +13,10 @@ import logging
 from typing import Any
 
 import tyro
-import uvicorn
 from fastapi import FastAPI
 
 from capx.serving import openai_server
+from capx.utils.unix_http import serve_app
 
 logger = logging.getLogger(__name__)
 
@@ -49,8 +49,7 @@ def create_app(api_key: str, base_url: str = _BASE_URL) -> FastAPI:
 def main(
     key_file: str = ".openrouterkey",
     api_key: str | None = None,
-    host: str = "127.0.0.1",
-    port: int = 8110,
+    socket: str = "model.sock",
     base_url: str = _BASE_URL,
 ):
     """Start the OpenRouter proxy server; the key is ``--api-key``, else the key file's first."""
@@ -58,7 +57,7 @@ def main(
         api_key = openai_server.load_api_keys(key_file)[0]
         logger.info(f"Loaded API key from {key_file}")
 
-    uvicorn.run(create_app(api_key, base_url), host=host, port=port)
+    serve_app(create_app(api_key, base_url), socket)
 
 
 if __name__ == "__main__":

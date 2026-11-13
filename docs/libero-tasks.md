@@ -24,10 +24,10 @@ source .venv-libero/bin/activate
 python capx/envs/launch.py \
     --config-path env_configs/libero/franka_libero_spatial_0.yaml \
     --model Qwen/Qwen3.6-27B \
-    --server-url http://127.0.0.1:8000/v1/chat/completions \
+    --server-url http+unix://model.sock/v1/chat/completions \
     --total-trials 10 --num-workers 2
 ```
-`model`と`server-url`は使用するLLMに応じて変更してください．
+`model`と`server-url`は使用するLLMに応じて変更してください．ローカルのサーバーはUnixソケットで待ち受けるので、URLは`http+unix://<ソケット>/<パス>`の形です（[README](../README.md#注意点)）．
 
 ### Web UI（現状ローカルLLMでは動作しない）
 
@@ -36,7 +36,7 @@ source .venv-libero/bin/activate
 python capx/envs/launch.py \
     --config-path env_configs/libero/franka_libero_spatial_0.yaml \
     --model Qwen/Qwen3.6-27B \
-    --server-url http://127.0.0.1:8000/v1/chat/completions \
+    --server-url http+unix://model.sock/v1/chat/completions \
     --total-trials 10 --num-workers 2 --web-ui True
 ```
 
@@ -224,12 +224,10 @@ YAMLファイルの`api_servers`に以下のようにCuroboのサーバーを追
 ```yaml
 api_servers:
   - _target_: capx.serving.launch_pyroki_server.main
-    port: 8116
-    host: 127.0.0.1
+    socket: pyroki.sock
     robot: panda_description
     target_link: panda_hand
   # ↓ 追加
   - _target_: capx.serving.launch_curobo_server.main
-    port: 8117
-    host: 127.0.0.1
+    socket: curobo.sock
 ```

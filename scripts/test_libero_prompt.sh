@@ -2,10 +2,11 @@
 # Quick test: 5 trials of LIBERO object_swap task 0
 # Uses the VDM reduced skill library config with the improved prompt
 # Single Gemini-3-Pro (no ensemble) to compare with old 0/18 baseline
-# Requires: SAM3 (8114), GraspNet (8115), PyRoKi (8116), NV LLM (8110)
+# Requires: SAM3 (sam3.sock), GraspNet (graspnet.sock), PyRoKi (pyroki.sock), NV LLM (model.sock)
 set -e
 
 cd "$(git rev-parse --show-toplevel)"
+source scripts/sockets.sh
 
 SUITE="libero_object_swap"
 TASK_ID=0
@@ -22,24 +23,22 @@ echo ""
 # --- Server health check ---
 echo "=== Checking required servers ==="
 MISSING=false
-for port_label in "8114:SAM3" "8115:GraspNet" "8116:PyRoKi"; do
-    port="${port_label%%:*}"
-    label="${port_label##*:}"
-    code=$(curl -sf -o /dev/null -w "%{http_code}" --connect-timeout 3 "http://127.0.0.1:$port/" 2>/dev/null || echo "000")
-    if [ "$code" != "000" ]; then
-        echo "  $label ($port): UP"
+for sock_label in "sam3.sock:SAM3" "graspnet.sock:GraspNet" "pyroki.sock:PyRoKi"; do
+    sock="${sock_label%%:*}"
+    label="${sock_label##*:}"
+    if sock_up "$sock"; then
+        echo "  $label ($sock): UP"
     else
-        echo "  $label ($port): DOWN"
+        echo "  $label ($sock): DOWN"
         MISSING=true
     fi
 done
 
 # NV LLM server
-code=$(curl -sf -o /dev/null -w "%{http_code}" --connect-timeout 3 http://127.0.0.1:8110/health 2>/dev/null || echo "000")
-if [ "$code" = "200" ]; then
-    echo "  NV LLM (8110): UP"
+if sock_ok model.sock /health; then
+    echo "  NV LLM (model.sock): UP"
 else
-    echo "  NV LLM (8110): DOWN"
+    echo "  NV LLM (model.sock): DOWN"
     MISSING=true
 fi
 
@@ -98,7 +97,7 @@ CUDA_VISIBLE_DEVICES="" MUJOCO_GL=egl TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD=1 \
     uv run --no-sync --active capx/envs/launch.py \
     --config-path "$TEST_CONFIG" \
     --model "google/gemini-3.1-pro-preview" \
-    --server-url "http://127.0.0.1:8110/chat/completions"
+    --server-url "http+unix://model.sock/chat/completions"
 
 echo ""
 echo "=== Done. Check results in $OUTPUT_DIR ==="

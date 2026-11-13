@@ -12,10 +12,10 @@ import numpy as np
 import requests
 import viser.transforms as vtf
 
-from capx.utils import turn_timing
+from capx.utils import turn_timing, unix_http_client
 
 # Service Configuration
-SERVICE_URL = os.environ.get("GRASPNET_SERVICE_URL", "http://127.0.0.1:8115")
+SERVICE_URL = os.environ.get("GRASPNET_SERVICE_URL", "http+unix://graspnet.sock")
 # Seconds to wait for the server to connect or send data. The server plans one request
 # at a time, so with many lanes a request can wait in line for several minutes.
 REQUEST_TIMEOUT_S = 900.0
@@ -166,7 +166,9 @@ def init_contact_graspnet(device: str = "cuda", checkpoint_path: str | None = No
         try:
             # start_time = time.time()
             with turn_timing.span("sidecar/plan"):
-                resp = requests.post(f"{SERVICE_URL}/plan", json=payload, timeout=REQUEST_TIMEOUT_S)
+                resp = unix_http_client.post(
+                    f"{SERVICE_URL}/plan", json=payload, timeout=REQUEST_TIMEOUT_S
+                )
                 resp.raise_for_status()
                 data = resp.json()
             # end_time = time.time()
@@ -208,7 +210,7 @@ def init_contact_graspnet_point_clouds() -> Any:
 
         try:
             with turn_timing.span("sidecar/plan_point_clouds"):
-                resp = requests.post(
+                resp = unix_http_client.post(
                     f"{SERVICE_URL}/plan_point_clouds", json=payload, timeout=REQUEST_TIMEOUT_S
                 )
                 resp.raise_for_status()

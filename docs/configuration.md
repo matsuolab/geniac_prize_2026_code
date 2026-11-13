@@ -12,7 +12,7 @@
 uv run --no-sync --active capx/envs/launch.py \
     --config-path <config.yaml> \
     --model google/gemini-3.1-pro-preview \
-    --server-url http://127.0.0.1:8110/chat/completions \
+    --server-url http+unix://model.sock/chat/completions \
     --temperature 1.0 \
     --total-trials 100 \
     --num-workers 12 \
@@ -23,7 +23,7 @@ uv run --no-sync --active capx/envs/launch.py \
 | --- | --- | --- |
 | `--config-path` | *（必須）* | YAML task config へのパス |
 | `--model` | `google/gemini-3.1-pro-preview` | モデル名 |
-| `--server-url` | `http://127.0.0.1:8110/chat/completions` | LLM エンドポイント |
+| `--server-url` | `http+unix://model.sock/chat/completions` | LLM エンドポイント。ローカルのサーバーは `http+unix://<ソケット>/<パス>`、外部の API は `https://`（[README](../README.md#注意点)） |
 | `--temperature` | `1.0` | サンプリング温度 |
 | `--total-trials` | YAML の値 | 評価試行回数 |
 | `--num-workers` | YAML の値 | 並列ワーカー数 |
@@ -59,23 +59,23 @@ YAML 設定に `api_servers` セクションを含めると、評価開始時に
 api_servers:
   - _target_: capx.serving.launch_sam3_server.main
     device: cuda
-    port: 8114
-    host: 127.0.0.1
+    socket: sam3.sock
 
   - _target_: capx.serving.launch_contact_graspnet_server.main
-    port: 8115
-    host: 127.0.0.1
+    socket: graspnet.sock
 
   - _target_: capx.serving.launch_pyroki_server.main
-    port: 8116
-    host: 127.0.0.1
+    socket: pyroki.sock
     robot: panda_description
     target_link: panda_hand
 ```
 
+各サーバーは `socket` の Unix ソケットだけで待ち受けます。ソケット名だけなら `CAPX_SOCKET_DIR`
+（既定は `~/.capx/sockets`、0700）の中に作られます。`port` と `host` は使えません。
+
 ランチャーは以下を自動的に行います。
 
-- ポートがすでに使用中のサーバー（外部で起動済みの場合など）をスキップ
+- ソケットですでに待ち受けているサーバー（外部で起動済みの場合など）をスキップ
 - 試行を実行する前に、すべてのサーバーが準備完了になるまで待機
 - 終了時にすべてのサーバーを停止
 
@@ -87,9 +87,9 @@ uv run --no-sync --active capx/serving/launch_servers.py --profile default
 
 | profile | サーバー | GPU の要否 |
 | --- | --- | --- |
-| `default` | SAM3（8114）+ ContactGraspNet（8115）+ PyRoKi（8116） | 必要（VRAM 約 5 GB） |
-| `full` | default + OWL-ViT（8118）+ SAM2（8113） | 必要（VRAM 約 14 GB） |
-| `minimal` | PyRoKi（8116）のみ | 不要（CPU のみ） |
+| `default` | SAM3（`sam3.sock`）+ ContactGraspNet（`graspnet.sock`）+ PyRoKi（`pyroki.sock`） | 必要（VRAM 約 5 GB） |
+| `full` | default + OWL-ViT（`owlvit.sock`）+ SAM2（`sam2.sock`） | 必要（VRAM 約 14 GB） |
+| `minimal` | PyRoKi（`pyroki.sock`）のみ | 不要（CPU のみ） |
 
 ## 新しい LLM プロバイダーの追加
 
@@ -112,7 +112,15 @@ OpenRouter では、1 つの API キーで Gemini、GPT、Claude、DeepSeek、Qw
 3. プロキシを起動します（複数のキーにわたる自動キーローテーションに対応しています）。
 
    ```bash
-   uv run --no-sync --active capx/serving/openrouter_server.py --key-file .openrouterkey --port 8110
+   uv run --no-sync --active capx/serving/openrouter_server.py --key-file .openrouterkey
+   ```
+
+   プロキシは `model.sock` で待ち受けます。`--server-url` の既定値 `http+unix://model.sock/chat/completions`
+   でそのまま使えます。
+
+   ```bash
+   # 別の名前で立てるとき
+   uv run --no-sync --active capx/serving/openrouter_server.py --key-file .openrouterkey --socket other.sock
    ```
 
 
@@ -120,7 +128,8 @@ OpenRouter では、1 つの API キーで Gemini、GPT、Claude、DeepSeek、Qw
 ### オプション B: vLLM（ローカルモデル）
 
 ```bash
-uv run python -m capx.serving.vllm_server --model Qwen/Qwen2.5-Coder-7B-Instruct --port 8080 --tensor-parallel-size 4
+uv run python -m capx.serving.vllm_server --model Qwen/Qwen2.5-Coder-7B-Instruct --tensor-parallel-size 4
+# model.sock で待ち受ける。--server-url http+unix://model.sock/v1/chat/completions で使う
 ```
 
 ### オプション C: カスタムプロバイダー

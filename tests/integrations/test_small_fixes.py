@@ -57,6 +57,8 @@ CAPX_STACK = {
     "matplotlib.pyplot": {},
     "matplotlib.patches": {},
     "requests": {"RequestException": Exception},
+    "capx.utils.unix_http": {"check_server_url": lambda url: url},
+    "capx.utils.unix_http_client": {"post": None, "new_session": None},
     "capx.envs": {},
     "capx.envs.base": {"BaseEnv": object},
     "capx.integrations": {},
@@ -106,6 +108,11 @@ def load(monkeypatch: pytest.MonkeyPatch):
             stub.__path__ = []
             stub.__dict__.update(attrs)
             monkeypatch.setitem(sys.modules, name, stub)
+            # `from package import name` reads a loaded package's attribute first.
+            parent_name, _, child = name.rpartition(".")
+            parent = sys.modules.get(parent_name)
+            if parent is not None:
+                monkeypatch.setattr(parent, child, stub, raising=False)
         path = REPO_ROOT / relpath
         spec = importlib.util.spec_from_file_location(f"_under_test_{path.stem}", path)
         assert spec is not None and spec.loader is not None
@@ -204,7 +211,7 @@ def test_molmo_does_not_retry_through_a_deadline(load) -> None:
 
     molmo = load(
         "capx/integrations/vision/molmo.py",
-        requests={"RequestException": Exception, "Session": Session},
+        **{"capx.utils.unix_http_client": {"new_session": Session}},
     )
     with pytest.raises(TimeoutError):
         molmo.init_molmo()(Image.new("RGB", (8, 8)), objects=["mug"])
@@ -217,7 +224,7 @@ def _post_with_retries(behaviour):
 
 def test_sam3_service_failure_is_an_error_not_an_empty_result(load) -> None:
     def down(url: str, payload: dict, **kwargs: Any) -> None:
-        raise RuntimeError("Request to http://127.0.0.1:8114/segment failed after 5 retries")
+        raise RuntimeError("Request to http+unix://sam3.sock/segment failed after 5 retries")
 
     sam3 = load("capx/integrations/vision/sam3.py", **_post_with_retries(down))
     with pytest.raises(RuntimeError, match="failed after 5 retries"):
@@ -257,7 +264,7 @@ def test_graspnet_requests_have_a_timeout(load) -> None:
 
     graspnet = load(
         "capx/integrations/vision/graspnet.py",
-        requests={"RequestException": Exception, "post": post},
+        **{"capx.utils.unix_http_client": {"post": post}},
     )
     empty = graspnet._numpy_to_base64(np.zeros((0, 4, 4)))
     graspnet.init_contact_graspnet()(np.zeros((4, 4)), np.eye(3), np.zeros((4, 4)), 1)

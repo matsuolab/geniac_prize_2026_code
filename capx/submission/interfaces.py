@@ -9,6 +9,7 @@ import yaml
 from pydantic import BaseModel, ConfigDict, Field, PositiveInt
 
 from capx.protocol.taskpack import Simulator
+from capx.utils.unix_http import ServerUrl
 
 # Robosuite's error for stepping past its horizon. The shims raise the same text once
 # the gateway has ended the episode, and `capx/envs/trial.py` reads it in stderr as
@@ -108,7 +109,7 @@ class SubmissionConfig(BaseModel):
     gateway_host: str = "gateway"
     gateway_port: int = 8000
     model: str
-    server_url: str
+    server_url: ServerUrl
     temperature: float = 0.0
     max_tokens: int = 4096
     trials_per_task: int | None = Field(default=None, ge=1)

@@ -215,14 +215,32 @@ def test_servers_started_before_a_failed_one_are_stopped(monkeypatch) -> None:
     started: list[_FakeProc] = []
 
     def start(cfg: dict[str, Any]) -> _FakeProc:
+        if cfg["socket"] == "second.sock":
+            raise RuntimeError("could not spawn")
         started.append(_FakeProc())
         return started[-1]
 
     monkeypatch.setattr(runner, "run_server_proc", start)
-    with pytest.raises(ValueError):
-        runner._start_api_servers([{"name": "first"}, {"name": "second", "port": "not-a-port"}])
+    monkeypatch.setattr(runner, "is_listening", lambda path: False)
+    with pytest.raises(RuntimeError):
+        runner._start_api_servers(
+            [{"_target_": "a.main", "socket": "first.sock"}, {"_target_": "b.main", "socket": "second.sock"}]
+        )
     assert len(started) == 1
     assert started[0].alive is False
+
+
+def test_a_tcp_api_server_entry_is_refused_before_anything_starts(monkeypatch) -> None:
+    started: list[dict[str, Any]] = []
+    monkeypatch.setattr(runner, "run_server_proc", started.append)
+    with pytest.raises(ValueError, match="Unix sockets"):
+        runner._start_api_servers(
+            [
+                {"_target_": "a.main", "socket": "first.sock"},
+                {"_target_": "b.main", "port": 8114, "host": "127.0.0.1"},
+            ]
+        )
+    assert started == []
 
 
 def test_stopping_kills_a_server_that_ignores_sigterm() -> None:

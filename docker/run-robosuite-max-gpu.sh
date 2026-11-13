@@ -24,7 +24,8 @@ set -euo pipefail
 CAPX_DIR="${CAPX_DIR:-/workspace/cap-x}"
 MODEL="${MODEL:-gpt-5}"
 CONFIG="${CONFIG:-env_configs/cube_stack/franka_robosuite_cube_stack_multiturn.yaml}"
-PORT="${PORT:-8110}"
+export CAPX_SOCKET_DIR="$(realpath -m "${CAPX_SOCKET_DIR:-${HOME}/.capx/sockets}")"
+SOCKET="${CAPX_SOCKET_DIR}/model.sock"
 NUM_WORKERS="${NUM_WORKERS:-4}"
 TOTAL_TRIALS="${TOTAL_TRIALS:-4}"
 
@@ -57,13 +58,13 @@ LOG_DIR="${CAPX_DIR}/outputs/_max_gpu_logs"
 mkdir -p "${LOG_DIR}"
 PROXY_LOG="${LOG_DIR}/openai_proxy_robosuite.log"
 
-echo "[max-gpu] Starting OpenAI proxy on :${PORT} (log: ${PROXY_LOG})"
-python capx/serving/openai_server.py --port "${PORT}" > "${PROXY_LOG}" 2>&1 &
+echo "[max-gpu] Starting OpenAI proxy on ${SOCKET} (log: ${PROXY_LOG})"
+python capx/serving/openai_server.py --socket "${SOCKET}" > "${PROXY_LOG}" 2>&1 &
 PROXY_PID=$!
 trap 'echo "[max-gpu] Stopping proxy (pid ${PROXY_PID})"; kill "${PROXY_PID}" 2>/dev/null || true' EXIT
 
 for _ in {1..30}; do
-    if curl -fsS "http://127.0.0.1:${PORT}/health" >/dev/null 2>&1; then
+    if curl -fsS --unix-socket "${SOCKET}" "http://localhost/health" >/dev/null 2>&1; then
         echo "[max-gpu] proxy ready"
         break
     fi
@@ -78,7 +79,7 @@ echo "[max-gpu] First run will download SAM3 weights (~5 GB) on demand."
 python capx/envs/launch.py \
     --config-path "${CONFIG}" \
     --model "${MODEL}" \
-    --server-url "http://127.0.0.1:${PORT}/chat/completions" \
+    --server-url "http+unix://model.sock/chat/completions" \
     --max-tokens "${MAX_TOKENS:-32768}" \
     --total-trials "${TOTAL_TRIALS}" \
     --num-workers "${NUM_WORKERS}"

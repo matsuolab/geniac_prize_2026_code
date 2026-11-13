@@ -1,10 +1,11 @@
 #!/bin/bash
 # Quick test: 5 trials of LIBERO object_swap task 0 (privileged baseline)
 # Uses the privileged config (ground-truth state, no perception servers)
-# Requires: PyRoKi (8116), NV LLM (8110)
+# Requires: PyRoKi (pyroki.sock), NV LLM (model.sock)
 set -e
 
 cd "$(git rev-parse --show-toplevel)"
+source scripts/sockets.sh
 
 SUITE="libero_object_swap"
 TASK_ID=0
@@ -22,27 +23,25 @@ echo ""
 echo "=== Checking required servers ==="
 MISSING=false
 
-code=$(curl -sf -o /dev/null -w "%{http_code}" --connect-timeout 3 "http://127.0.0.1:8116/" 2>/dev/null || echo "000")
-if [ "$code" != "000" ]; then
-    echo "  PyRoKi (8116): UP"
+if sock_up pyroki.sock; then
+    echo "  PyRoKi (pyroki.sock): UP"
 else
-    echo "  PyRoKi (8116): DOWN"
+    echo "  PyRoKi (pyroki.sock): DOWN"
     MISSING=true
 fi
 
-code=$(curl -sf -o /dev/null -w "%{http_code}" --connect-timeout 3 http://127.0.0.1:8110/health 2>/dev/null || echo "000")
-if [ "$code" = "200" ]; then
-    echo "  NV LLM (8110): UP"
+if sock_ok model.sock /health; then
+    echo "  NV LLM (model.sock): UP"
 else
-    echo "  NV LLM (8110): DOWN"
+    echo "  NV LLM (model.sock): DOWN"
     MISSING=true
 fi
 
 if [ "$MISSING" = true ]; then
     echo ""
     echo "ERROR: Required servers are not running."
-    echo "Start PyRoKi:  nohup python -m capx.serving.launch_pyroki_server --port 8116 --host 127.0.0.1 --robot panda_description --target-link panda_hand > logs/pyroki.log 2>&1 &"
-    echo "Start NV LLM:  nohup python -m capx.serving.openrouter_server --key-file .openrouterkey --port 8110 > logs/nv_server.log 2>&1 &"
+    echo "Start PyRoKi:  nohup python -m capx.serving.launch_pyroki_server --socket pyroki.sock --robot panda_description --target-link panda_hand > logs/pyroki.log 2>&1 &"
+    echo "Start NV LLM:  nohup python -m capx.serving.openrouter_server --key-file .openrouterkey > logs/nv_server.log 2>&1 &"
     exit 1
 fi
 
@@ -89,7 +88,7 @@ CUDA_VISIBLE_DEVICES="" MUJOCO_GL=egl TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD=1 \
     uv run --no-sync --active capx/envs/launch.py \
     --config-path "$TEST_CONFIG" \
     --model "google/gemini-3.1-pro-preview" \
-    --server-url "http://127.0.0.1:8110/chat/completions"
+    --server-url "http+unix://model.sock/chat/completions"
 
 echo ""
 echo "=== Done. Check results in $OUTPUT_DIR ==="

@@ -3,13 +3,14 @@
 # Usage: bash scripts/run_experiment_now.sh
 set -e
 cd "$(git rev-parse --show-toplevel)"
+source scripts/sockets.sh
 
 echo "=== Server Check ==="
-for port in 8110 8114 8115 8116; do
-    if timeout 2 bash -c "echo > /dev/tcp/127.0.0.1/$port" 2>/dev/null; then
-        echo "  Port $port: UP"
+for sock in model.sock sam3.sock graspnet.sock pyroki.sock; do
+    if sock_up "$sock"; then
+        echo "  $sock: UP"
     else
-        echo "  Port $port: DOWN -- please start servers first"
+        echo "  $sock: DOWN -- please start servers first"
         echo "  Run: bash scripts/start_servers_and_eval.sh"
         exit 1
     fi

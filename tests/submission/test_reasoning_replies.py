@@ -23,7 +23,7 @@ MOLMO = "capx.integrations.vision.molmo"
 
 
 def _molmo(monkeypatch: pytest.MonkeyPatch):
-    monkeypatch.setenv("CAPX_MOLMO_URL", "http://127.0.0.1:8110/v1")
+    monkeypatch.setenv("CAPX_MOLMO_URL", "http+unix://model.sock/v1")
     sys.modules.pop(MOLMO, None)
     return importlib.import_module(MOLMO)
 
@@ -45,7 +45,7 @@ def _fake_session(monkeypatch, molmo, message: dict) -> dict:
 
             return Response()
 
-    monkeypatch.setattr(molmo.requests, "Session", lambda: FakeSession())
+    monkeypatch.setattr(molmo.unix_http_client, "new_session", lambda: FakeSession())
     return sent
 
 
@@ -129,10 +129,10 @@ def test_the_agent_client_reads_a_reply_that_only_thought(
         def close(self) -> None:
             pass
 
-    monkeypatch.setattr(llm_client.requests, "post", lambda *a, **k: Response())
+    monkeypatch.setattr(llm_client.unix_http_client, "post", lambda *a, **k: Response())
     args = SimpleNamespace(
         model="Qwen/Qwen3.6-27B",
-        server_url="http://127.0.0.1:8110/v1/chat/completions",
+        server_url="http+unix://model.sock/v1/chat/completions",
         api_key=None,
         temperature=0.0,
         max_tokens=64,

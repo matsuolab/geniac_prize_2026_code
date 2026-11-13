@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
-# Persistent Qwen3.6-27B server for cap-x code generation (port 8110).
+# Persistent Qwen3.6-27B server for cap-x code generation.
 #
-# Serves an OpenAI-compatible endpoint at http://127.0.0.1:8110/v1/chat/completions.
+# Serves an OpenAI-compatible endpoint on the Unix socket
+# ${CAPX_SOCKET_DIR:-~/.capx/sockets}/model.sock, in a directory only you can enter.
 # capx/llm/client.py sends any model name not in its hardcoded lists as a plain
 # OpenAI chat-completions payload, so pass to launch.py:
-#   --model Qwen/Qwen3.6-27B --server-url http://127.0.0.1:8110/v1/chat/completions
+#   --model Qwen/Qwen3.6-27B --server-url http+unix://model.sock/v1/chat/completions
 # (NOTE: the /v1 prefix is required for vLLM; /chat/completions alone is the
 #  OpenAI-proxy path used by run-robosuite-smoke.sh and will 404 here.)
 #
@@ -33,7 +34,6 @@ set -euo pipefail
 
 CAPX_DIR="${CAPX_DIR:-/workspace/cap-x}"
 QWEN_MODEL="${QWEN_MODEL:-Qwen/Qwen3.6-27B}"
-PORT="${PORT:-8110}"
 GPU_UTIL="${GPU_UTIL:-0.72}"
 MAX_MODEL_LEN="${MAX_MODEL_LEN:-16384}"
 MAX_NUM_SEQS="${MAX_NUM_SEQS:-8}"
@@ -61,21 +61,41 @@ else
     source .venv-serve/bin/activate
 fi
 
+SOCKET_DIR="$(realpath -m "${CAPX_SOCKET_DIR:-${HOME}/.capx/sockets}")"
+export CAPX_SOCKET_DIR="${SOCKET_DIR}"
+mkdir -p -m 700 "${SOCKET_DIR}"
+if [[ ! -O "${SOCKET_DIR}" ]] || (( 0$(stat -c %a "${SOCKET_DIR}") & 077 )); then
+    echo "ERROR: ${SOCKET_DIR} must be owned by you with mode 700 (chmod 700 it)" >&2
+    exit 1
+fi
+SOCKET="${SOCKET_DIR}/model.sock"
+
 mkdir -p outputs/_qwen_logs
 LOG="outputs/_qwen_logs/qwen_vllm.log"
 
 echo "[qwen] starting vLLM"
-echo "       model=${QWEN_MODEL}  port=${PORT}  gpu=${SERVE_GPU}"
+echo "       model=${QWEN_MODEL}  gpu=${SERVE_GPU}"
 echo "       gpu_memory_utilization=${GPU_UTIL}  max_model_len=${MAX_MODEL_LEN}"
 echo "       log -> ${LOG}"
-echo "       endpoint: http://127.0.0.1:${PORT}/v1/chat/completions"
+echo "       socket: ${SOCKET}"
 
+# vLLM binds the socket itself and fails on a file a dead server left behind.
+# Only that file is removed: curl exit 7 means nothing accepted the connection.
+if [[ -S "${SOCKET}" ]]; then
+    rc=0
+    curl -s -o /dev/null --max-time 5 --unix-socket "${SOCKET}" http://localhost/ || rc=$?
+    if (( rc != 7 )); then
+        echo "ERROR: a server is already listening on ${SOCKET}" >&2
+        exit 1
+    fi
+    rm -f "${SOCKET}"
+fi
+umask 077
 HF_HUB_ENABLE_HF_TRANSFER=1 CUDA_VISIBLE_DEVICES="${SERVE_GPU}" \
 exec python -m vllm.entrypoints.openai.api_server \
     --model "${QWEN_MODEL}" \
     --served-model-name "${QWEN_MODEL}" \
-    --host 127.0.0.1 \
-    --port "${PORT}" \
+    --uds "${SOCKET}" \
     --quantization fp8 \
     --kv-cache-dtype fp8 \
     --gpu-memory-utilization "${GPU_UTIL}" \

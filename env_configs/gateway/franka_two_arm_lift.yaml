@@ -14,19 +14,16 @@ prompt: |
 api_servers:
   - _target_: capx.serving.launch_owlvit_server.main
     device: cuda
-    port: 8117
-    host: 127.0.0.1
+    socket: owlvit.sock
     model_name: google/owlv2-large-patch14-ensemble
 
   - _target_: capx.serving.launch_sam2_server.main
     device: cuda
-    port: 8113
-    host: 127.0.0.1
+    socket: sam2.sock
     model_name: facebook/sam2.1-hiera-large
 
   - _target_: capx.serving.launch_contact_graspnet_server.main
-    port: 8115
-    host: 127.0.0.1
+    socket: graspnet.sock
 
 # Where singularity/capx-submission-agent0.yaml mounts these weights; the submission
 # has no network to fetch them.

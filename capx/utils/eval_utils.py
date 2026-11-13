@@ -4,10 +4,10 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict
 
-from openai import OpenAI
+from capx.utils.openai_client import openai_client
 
-# Use local OpenRouter proxy (capx/serving/openrouter_server.py on port 8110)
-_LLM_BASE_URL = os.environ.get("LLM_BASE_URL", "http://127.0.0.1:8110/")
+# The local OpenRouter proxy (capx/serving/openrouter_server.py), on model.sock.
+_LLM_BASE_URL = os.environ.get("LLM_BASE_URL", "http+unix://model.sock/")
 _LLM_API_KEY = os.environ.get("OPENROUTER_API_KEY", "not-needed-for-local-proxy")
 
 SYS_PROMPT = """
@@ -138,7 +138,7 @@ def analyze_failures(sorted_results: dict[int, TrialData]) -> str:
     Failures:
     {failures}
     """
-    client = OpenAI(base_url=_LLM_BASE_URL, api_key=_LLM_API_KEY)
+    client = openai_client(_LLM_BASE_URL, _LLM_API_KEY)
     completion = client.chat.completions.create(
         model="google/gemini-3.1-pro-preview",
         messages=[{"role": "user", "content": prompt}],
@@ -160,7 +160,7 @@ def analyze_highlights(sorted_results: dict[int, TrialData]) -> str:
     Failures:
     {failures}
     """
-    client = OpenAI(base_url=_LLM_BASE_URL, api_key=_LLM_API_KEY)
+    client = openai_client(_LLM_BASE_URL, _LLM_API_KEY)
     completion = client.chat.completions.create(
         model="google/gemini-3.1-pro-preview",
         messages=[{"role": "user", "content": prompt}],

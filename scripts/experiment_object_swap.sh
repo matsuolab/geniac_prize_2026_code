@@ -4,6 +4,7 @@
 set -e
 
 cd "$(git rev-parse --show-toplevel)"
+source scripts/sockets.sh
 
 # Activate the LIBERO venv
 source .venv-libero/bin/activate
@@ -11,12 +12,11 @@ source .venv-libero/bin/activate
 # Check servers
 echo "=== Checking servers ==="
 all_up=true
-for port in 8110 8114 8115 8116; do
-    if curl -sf --connect-timeout 2 http://127.0.0.1:$port/ > /dev/null 2>&1 || \
-       curl -sf --connect-timeout 2 http://127.0.0.1:$port/health > /dev/null 2>&1; then
-        echo "  Port $port: UP"
+for sock in model.sock sam3.sock graspnet.sock pyroki.sock; do
+    if sock_up "$sock"; then
+        echo "  $sock: UP"
     else
-        echo "  Port $port: DOWN"
+        echo "  $sock: DOWN"
         all_up=false
     fi
 done

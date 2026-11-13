@@ -3,7 +3,7 @@ from urllib.parse import urlparse
 
 import requests
 
-from capx.utils import turn_timing
+from capx.utils import turn_timing, unix_http_client
 
 
 def post_with_retries(
@@ -33,7 +33,7 @@ def post_with_retries(
     while time.time() < deadline and attempts < max_retries:
         try:
             with turn_timing.span(f"sidecar{urlparse(url).path}"):
-                resp = requests.post(url, json=payload, timeout=timeout_seconds)
+                resp = unix_http_client.post(url, json=payload, timeout=timeout_seconds)
                 resp.raise_for_status()
                 return resp.json()
         except requests.RequestException as e:
@@ -79,7 +79,7 @@ def post_with_queue_tolerance(
     while time.time() < deadline and attempts < max_retries:
         try:
             with turn_timing.span(f"sidecar{urlparse(url).path}"):
-                resp = requests.post(url, json=payload, timeout=timeout_seconds)
+                resp = unix_http_client.post(url, json=payload, timeout=timeout_seconds)
             if resp.status_code == 503:
                 # Server is busy / model not ready -- treat as transient
                 last_err = requests.HTTPError(

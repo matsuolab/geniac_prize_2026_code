@@ -14,19 +14,18 @@ MODEL_PATH=${MODEL_PATH:-Qwen/Qwen2.5-Coder-7B-Instruct}
 DATA_ROOT=${DATA_ROOT:-$HOME/data/capx/franka}
 TRAIN_TEMPERATURE=${TRAIN_TEMPERATURE:-1.0}
 N_GPUS=${N_GPUS:-$(nvidia-smi -L 2>/dev/null | wc -l)}
-PYROKI_PORT=${PYROKI_PORT:-8116}
+source "$(dirname "${BASH_SOURCE[0]}")/sockets.sh"
 
 # ---------------------------------------------------------------------------
 # Auto-start PyRoKi IK server if not already running
 # ---------------------------------------------------------------------------
-if ! python -c "import socket; s=socket.create_connection(('127.0.0.1', ${PYROKI_PORT}), timeout=1); s.close()" 2>/dev/null; then
-  echo "Starting PyRoKi IK server on port ${PYROKI_PORT}..."
-  CUDA_VISIBLE_DEVICES="" python -m capx.serving.launch_pyroki_server \
-    --port "${PYROKI_PORT}" --host 127.0.0.1 &
+if ! sock_up pyroki.sock; then
+  echo "Starting PyRoKi IK server on pyroki.sock..."
+  CUDA_VISIBLE_DEVICES="" python -m capx.serving.launch_pyroki_server --socket pyroki.sock &
   PYROKI_PID=$!
   # Wait up to 60s for it to become ready
   for i in $(seq 1 60); do
-    if python -c "import socket; s=socket.create_connection(('127.0.0.1', ${PYROKI_PORT}), timeout=1); s.close()" 2>/dev/null; then
+    if sock_up pyroki.sock; then
       echo "PyRoKi IK server ready (PID ${PYROKI_PID})"
       break
     fi

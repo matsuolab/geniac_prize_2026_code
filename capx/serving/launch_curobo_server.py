@@ -4,7 +4,7 @@ Exposes IK and collision-aware motion planning for Franka Panda via FastAPI.
 Uses NVIDIA cuRobo for GPU-accelerated trajectory optimization.
 
 Usage:
-    uv run --no-sync --active python -m capx.serving.launch_curobo_server --port 8117
+    uv run --no-sync --active python -m capx.serving.launch_curobo_server --socket curobo.sock
 """
 
 from __future__ import annotations
@@ -16,9 +16,10 @@ import time
 
 import numpy as np
 import torch
-import uvicorn
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
+
+from capx.utils.unix_http import serve_app
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("curobo_server")
@@ -404,8 +405,7 @@ async def health():
 def main(
     robot_config: str = "franka.yml",
     ee_link: str = "panda_hand",
-    port: int = 8117,
-    host: str = "127.0.0.1",
+    socket: str = "curobo.sock",
     no_cuda_graph: bool = False,
 ):
     init_curobo(
@@ -413,7 +413,7 @@ def main(
         ee_link=ee_link,
         use_cuda_graph=not no_cuda_graph,
     )
-    uvicorn.run(app, host=host, port=port)
+    serve_app(app, socket)
 
 
 if __name__ == "__main__":
@@ -422,15 +422,13 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="cuRobo Motion Planning Server")
     parser.add_argument("--robot-config", default="franka.yml")
     parser.add_argument("--ee-link", default="panda_hand")
-    parser.add_argument("--port", type=int, default=8117)
-    parser.add_argument("--host", default="127.0.0.1")
+    parser.add_argument("--socket", default="curobo.sock")
     parser.add_argument("--no-cuda-graph", action="store_true")
     args = parser.parse_args()
 
     main(
         robot_config=args.robot_config,
         ee_link=args.ee_link,
-        port=args.port,
-        host=args.host,
+        socket=args.socket,
         no_cuda_graph=args.no_cuda_graph,
     )

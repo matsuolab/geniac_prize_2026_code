@@ -53,18 +53,13 @@ else
     echo "[run.sh] auto-selected free GPU: ${GPUS}"
 fi
 
-# Ports: 8110 (LLM proxy), 8114 SAM3, 8115 GraspNet, 8116 PyRoKi, 8200 web UI
-# Host is shared with other users, so host-side ports are randomized by
-# default to avoid collisions (container-side ports stay fixed). Pin
-# specific host ports with: LLM_PROXY_PORT=8110 WEBUI_PORT=8200 bash docker/run.sh
-if [[ -z "${LLM_PROXY_PORT:-}" || -z "${WEBUI_PORT:-}" ]]; then
-    read -r _RAND_PORT1 _RAND_PORT2 < <(shuf -i 20000-59999 -n2)
-fi
-LLM_PROXY_PORT="${LLM_PROXY_PORT:-${_RAND_PORT1}}"
-WEBUI_PORT="${WEBUI_PORT:-${_RAND_PORT2}}"
-echo "[run.sh] host port ${LLM_PROXY_PORT} -> container 8110 (LLM proxy)"
+# The only published port is the web UI's (8200, behind its token). The LLM proxy,
+# vLLM and the perception/IK servers listen on Unix sockets inside the container.
+# Host is shared with other users, so the host-side port is randomized by default
+# to avoid collisions. Pin it with: WEBUI_PORT=8200 bash docker/run.sh
+WEBUI_PORT="${WEBUI_PORT:-$(shuf -i 20000-59999 -n1)}"
 echo "[run.sh] host port ${WEBUI_PORT} -> container 8200 (web UI)"
-PORTS=(-p "${LLM_PROXY_PORT}:8110" -p "${WEBUI_PORT}:8200")
+PORTS=(-p "${WEBUI_PORT}:8200")
 
 MOUNTS=(
     -v "${CAPX_HOST}:/workspace/cap-x"

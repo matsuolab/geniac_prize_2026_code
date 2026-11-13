@@ -91,7 +91,7 @@ def _write_task_config(tmp_path: Path, name: str, **overrides: Any) -> str:
 def _submission_config(**overrides: Any) -> SubmissionConfig:
     base: dict[str, Any] = {
         "model": "test-model",
-        "server_url": "http://127.0.0.1:9/v1/chat/completions",
+        "server_url": "http+unix://model.sock/v1/chat/completions",
         "trials_per_task": 1,
         "output_dir": "outputs/test",
         "task_map": [],
@@ -183,9 +183,9 @@ def test_a_mounted_model_is_used_in_place_of_its_hub_name(tmp_path: Path) -> Non
         apis=[_STUB_API_NAME],
         prompt="x",
         api_servers=[
-            {"_target_": "owlvit.main", "model_name": "google/owlv2", "port": 8117},
-            {"_target_": "sam2.main", "model_name": "facebook/sam2", "port": 8113},
-            {"_target_": "graspnet.main", "port": 8115},
+            {"_target_": "owlvit.main", "model_name": "google/owlv2", "socket": "owlvit.sock"},
+            {"_target_": "sam2.main", "model_name": "facebook/sam2", "socket": "sam2.sock"},
+            {"_target_": "graspnet.main", "socket": "graspnet.sock"},
         ],
         local_models={"google/owlv2": str(mounted), "facebook/sam2": str(tmp_path / "absent")},
     )

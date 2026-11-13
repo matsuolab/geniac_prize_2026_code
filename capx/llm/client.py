@@ -23,7 +23,7 @@ from typing import TYPE_CHECKING, Any, TypeVar
 import requests
 import urllib3
 
-from capx.utils import turn_timing
+from capx.utils import turn_timing, unix_http_client
 
 if TYPE_CHECKING:
     from capx.envs.launch import LaunchArgs
@@ -290,7 +290,7 @@ def _post(
             response = _before(
                 deadline,
                 functools.partial(
-                    requests.post,
+                    unix_http_client.post,
                     args.server_url,
                     headers=headers,
                     data=data,
