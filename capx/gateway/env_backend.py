@@ -64,12 +64,15 @@ class EnvBackendServer:
         self,
         factory: EnvFactory,
         path: str,
+        *,
+        main_thread: bool = False,
     ) -> None:
         self._factory = factory
         self._path = path
         self._sock = bind_unix_socket(path)
         self._stop = threading.Event()
         self._serving = threading.Lock()
+        self._main_thread = main_thread
 
     @property
     def address(self) -> BackendAddress:
@@ -85,7 +88,10 @@ class EnvBackendServer:
                 conn, _ = self._sock.accept()
             except OSError:
                 break
-            threading.Thread(target=self._handle, args=(conn,), daemon=True).start()
+            if self._main_thread:
+                self._handle(conn)
+            else:
+                threading.Thread(target=self._handle, args=(conn,), daemon=True).start()
 
     def _handle(self, conn: socket.socket) -> None:
         env: LowLevelEnv | None = None
@@ -111,12 +117,18 @@ class EnvBackendServer:
             if method == "ping":
                 return {"ok": True, "result": {}}, env
             if method == "build":
+                if env is not None:
+                    raise RuntimeError("Close the current environment before another build")
                 env = self._factory.build(TaskSpec.model_validate(payload["spec"]))
                 return {"ok": True, "result": {"embodiment": env.embodiment}}, env
             if env is None:
                 raise RuntimeError("no env built (send 'build' first)")
+            if method == "close":
+                env.close()
+                return {"ok": True, "result": {}}, None
             return {"ok": True, "result": self._call(env, method, payload)}, env
         except Exception as exc:  # sim error travels back as a coded failure
+            _logger.exception("Environment backend failed during %s", method)
             return {"ok": False, "error": f"{type(exc).__name__}: {exc}"}, env
 
     def _call(self, env: LowLevelEnv, method: str, payload: dict[str, Any]) -> dict[str, Any]:

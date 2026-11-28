@@ -13,6 +13,7 @@ from typing import Any
 import numpy as np
 
 from capx.envs.base import BaseEnv
+from capx.behavior_runtime_support import resolve_task_scene
 
 import yaml
 import omnigibson as og
@@ -164,12 +165,16 @@ class R1ProBehaviourLowLevel(BaseEnv):
             self.controller_cfg['task']['activity_name'] = activity_name
             # Load all rooms so any task can find its required objects
             self.controller_cfg['scene']['load_room_types'] = None
+            scene, scene_file = resolve_task_scene(gm.DATA_PATH, activity_name)
+            self.controller_cfg['scene']['scene_model'] = scene
+            self.controller_cfg['scene']['scene_file'] = scene_file
         self.task_name = self.controller_cfg['task']['activity_name']
 
         self._sim_step_count = 0
         # The task's own success flag from the last env.step. Reading it is the only
         # way to score a BEHAVIOR task without stepping the sim again.
         self._last_success = False
+        self._closed = False
 
         # Load config file
         task_name = self.controller_cfg["task"]['activity_name']
@@ -226,7 +231,10 @@ class R1ProBehaviourLowLevel(BaseEnv):
         """
         Load agent and task metrics.
         """
-        return [AgentMetric(self.human_stats), TaskMetric(self.human_stats)]
+        # Score the native whole-task Boolean without demo metric enumeration.
+        # TaskMetric.aggregate enumerates grounded alternatives on every reward
+        # query and can take many minutes for storing_food/gift_baskets.
+        return []
     
     def load_task_instance(self, instance_id: int, test_hidden: bool = False) -> None:
         """
@@ -385,19 +393,7 @@ class R1ProBehaviourLowLevel(BaseEnv):
         Returns:
             Reward for the current state.
         """
-        if self.task_name == "turning_on_radio":
-            return self.pick_up_radio_reward()
-        if 'trash' in self.task_name:
-            return self.pick_up_trash_reward()
-
-        metrics = {}
-        for metric in self.metrics:
-            metrics.update(_metric_results(metric, self.env))
-            
-        if self.task_completed():
-            return 1
-        else:
-            return metrics['q_score']['final']
+        return float(self.task_completed())
 
     def get_object_state(self, object_name: str) -> dict[str, Any]:
         """
@@ -842,11 +838,25 @@ class R1ProBehaviourLowLevel(BaseEnv):
     
     def task_completed(self) -> bool:
         """Whether the task is done, as of the last step. Never advances the sim."""
-        if self.task_name == "turning_on_radio":
-            return self.pick_up_radio_reward() == 1
-        if 'trash' in self.task_name:
-            return self.pick_up_trash_reward() == 1
         return self._last_success
+
+    def close(self) -> None:
+        if getattr(self, "_closed", False):
+            return
+        self._closed = True
+        self._record_frames = False
+        self._frame_buffer.clear()
+        if os.environ.get("CAPX_BEHAVIOR_WORKER") == "1":
+            # The owning lane terminates this exec-created worker after the
+            # close acknowledgement. Do not reuse or clear its global stage.
+            return
+        # Both gym.Env.close and og.Environment.close are no-ops. Leaving the
+        # global simulator playing poisons the next scene in this same process.
+        og.sim.stop()
+        og.clear()
+        self.env = None
+        self.robot = None
+        self.controller = None
     
     def enable_video_capture(self, enabled: bool = True, *, clear: bool = True) -> None:
         self._record_frames = enabled

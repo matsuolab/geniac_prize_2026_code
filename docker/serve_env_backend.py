@@ -24,12 +24,19 @@ from __future__ import annotations
 
 import os
 
+from capx.behavior_runtime_support import configure_cpu_threads
+
+configure_cpu_threads()
+
 from capx.gateway.env_backend import EnvBackendServer
 from capx.gateway.gateway import EnvFactory
 from capx.protocol.taskpack import Simulator, import_pack_modules
 
 
 def _local_factory(simulator: Simulator) -> EnvFactory:
+    if simulator is Simulator.BEHAVIOR and os.environ.get("CAPX_BEHAVIOR_WORKER") != "1":
+        from capx.gateway.behavior_isolation import IsolatedBehaviorFactory
+        return IsolatedBehaviorFactory()
     if simulator is Simulator.ROBOSUITE:
         from capx.gateway.robosuite_adapter import RobosuiteEnvFactory
 
@@ -81,7 +88,12 @@ def main() -> None:
     owner_ids = tuple(int(part) for part in owner.split(":")) if owner else None
     if owner_ids is not None:
         _make_socket_dir_for(unix_path, *owner_ids)
-    server = EnvBackendServer(_local_factory(kind), unix_path)
+    # Kit's renderer and USD callbacks require the actual process main thread,
+    # not merely a stable executor thread. A BEHAVIOR lane already serves one
+    # env lifecycle at a time, so dispatch it synchronously on that main thread.
+    if kind is Simulator.BEHAVIOR:
+        os.environ["CAPX_SIM_MAIN_THREAD"] = "1"
+    server = EnvBackendServer(_local_factory(kind), unix_path, main_thread=kind is Simulator.BEHAVIOR)
     if owner_ids is not None:
         os.chown(unix_path, *owner_ids)
     print(f"env backend ({simulator}) serving on {server.address}", flush=True)

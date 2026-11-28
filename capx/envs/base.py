@@ -88,6 +88,8 @@ def register_env(name: str, factory: Callable[[], BaseEnv]) -> None:
 def env_parameters(name: str) -> set[str]:
     """The keyword arguments a registered env's factory accepts."""
     if name not in _ENV_FACTORIES:
+        import capx.envs.simulators
+    if name not in _ENV_FACTORIES:
         raise KeyError(f"Environment '{name}' not registered")
     return set(inspect.signature(_ENV_FACTORIES[name]).parameters)
 
@@ -101,6 +103,8 @@ def get_env(
     **env_kwargs: Any,
 ) -> BaseEnv:
     if name not in _ENV_FACTORIES:
+        import capx.envs.simulators
+    if name not in _ENV_FACTORIES:
         raise KeyError(f"Environment '{name}' not registered")
     return _ENV_FACTORIES[name](
         privileged=privileged, enable_render=enable_render, viser_debug=viser_debug, **env_kwargs
@@ -108,6 +112,7 @@ def get_env(
 
 
 def list_envs() -> list[str]:
+    import capx.envs.simulators
     return list(_ENV_FACTORIES.keys())
 
 

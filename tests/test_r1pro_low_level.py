@@ -131,7 +131,7 @@ def test_scoring_reads_the_last_step_and_never_steps(r1pro_b1k) -> None:
     env = _env(r1pro_b1k)
     env.step(np.zeros(3))
     assert env.task_completed() is False
-    assert env.compute_reward() == 0.25
+    assert env.compute_reward() == 0.0
 
     env.env.next_success = True
     env.step(np.zeros(3))
