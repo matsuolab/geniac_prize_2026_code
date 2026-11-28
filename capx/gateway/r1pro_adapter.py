@@ -15,6 +15,7 @@ methods that touch the sim) so the rest of the gateway stays importable without 
 from __future__ import annotations
 
 import contextlib
+import os
 import signal
 import threading
 from collections.abc import Callable
@@ -23,6 +24,11 @@ from typing import TYPE_CHECKING, Any, TypeVar
 
 import numpy as np
 
+from capx.behavior_runtime_support import (
+    configure_isaac_threads,
+    initialization_lock,
+    install_camera_warmup,
+)
 from capx.gateway.low_level import RECORDING_SIZE, SimAdapter, StepOutcome
 from capx.protocol.actions import R1ProRawAction, RawAction
 from capx.protocol.taskpack import TaskSpec
@@ -51,6 +57,10 @@ _SIM_THREAD = ThreadPoolExecutor(max_workers=1, thread_name_prefix="isaac-sim")
 
 
 def _on_sim_thread(fn: Callable[[], _T]) -> _T:
+    if os.environ.get("CAPX_SIM_MAIN_THREAD") == "1":
+        if threading.current_thread() is not threading.main_thread():
+            raise RuntimeError("The BEHAVIOR backend must dispatch Isaac calls on its process main thread")
+        return fn()
     return _SIM_THREAD.submit(fn).result()
 
 
@@ -107,7 +117,10 @@ class R1ProLowLevelEnv(SimAdapter):
 
     def reset(self, *, seed: int) -> None:
         # The seed selects a presampled BEHAVIOR task instance, not a sim RNG seed.
-        _on_sim_thread(lambda: self._base.reset(options={"trial": seed}))
+        def reset():
+            with initialization_lock():
+                self._base.reset(options={"trial": seed})
+        _on_sim_thread(reset)
 
     def apply_raw_action(self, action: RawAction) -> StepOutcome:
         assert isinstance(action, R1ProRawAction)
@@ -224,16 +237,34 @@ class R1ProEnvFactory:
             # Imported here, not in __init__, so the backend is listening long before
             # the ~15 s omnigibson import finishes.
             with _tolerate_signal_handlers_off_main_thread():
+                import os
+
+                import torch
+                threads = int(os.environ.get("CAPX_LANE_CPUS", "1"))
+                torch.set_num_threads(threads)
+                if torch.get_num_interop_threads() != 1:
+                    torch.set_num_interop_threads(1)
+                configure_isaac_threads()
                 import capx.envs.simulators  # noqa: F401 — registers the low-level envs
                 from capx.envs.base import get_env
-
-                return get_env(
-                    spec.env_target,
-                    privileged=spec.privileged,
-                    enable_render=self._enable_render,
-                    motion_planner=False,
-                    **spec.env_kwargs,
-                )
+                install_camera_warmup()
+                with initialization_lock():
+                    # A cached closed env retains stale scene/robot references.
+                    # This factory exclusively owns one BEHAVIOR stage per lane.
+                    try:
+                        return get_env.__wrapped__(
+                            spec.env_target,
+                            privileged=spec.privileged,
+                            enable_render=self._enable_render,
+                            motion_planner=False,
+                            **spec.env_kwargs,
+                        )
+                    except BaseException:
+                        import omnigibson as og
+                        if og.sim is not None:
+                            og.sim.stop()
+                            og.clear()
+                        raise
 
         return R1ProLowLevelEnv(_on_sim_thread(build_on_sim_thread))
 

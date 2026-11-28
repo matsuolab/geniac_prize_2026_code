@@ -146,3 +146,5 @@ LLM のプロキシは [docs/configuration.md](docs/configuration.md)、Docker �
 ## ライセンス
 
 このプロジェクトは [MIT ライセンス](LICENSE) の下で公開されています。
+
+BEHAVIORバックエンドの起動・終了とレーン設定は [BEHAVIOR runtime](docs/behavior-runtime.md) を参照してください。

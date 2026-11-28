@@ -19,6 +19,11 @@ from capx.protocol.actions import R1ProRawAction
 from capx.protocol.taskpack import SeedPolicy
 
 
+@pytest.fixture(autouse=True)
+def owned_initialization_lock(tmp_path, monkeypatch):
+    monkeypatch.setenv("CAPX_INIT_LOCK", str(tmp_path / "simulator-init.lock"))
+
+
 class ThreadRecordingBase:
     def __init__(self) -> None:
         self.threads: list[int] = []
